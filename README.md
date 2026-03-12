@@ -15,4 +15,4 @@ This skill package is available on GitHub. To use it, clone this repository and 
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-Copyright (c) 2024 Indigo Karasu
+Copyright (c) 2026 Indigo Karasu
