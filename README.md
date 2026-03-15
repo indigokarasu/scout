@@ -24,7 +24,7 @@ Structured OSINT research on people, companies, and organizations. Provenance-ba
 
 ## 📊 Output & Journals
 
-Produces: Produces research session logs, finding records with source citations, and identity resolution reports.
+Research session logs, finding records with source citations, and identity resolution reports.
 
 ---
 
