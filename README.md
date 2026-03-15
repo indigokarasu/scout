@@ -1,12 +1,12 @@
 # 🔎 scout
 
-Structured OSINT research on people, companies, and organizations. Provenance-backed briefs using free-first workflows.
+Structured OSINT research on people, companies, and organizations. Provenance-backed briefs using a free-first source waterfall.
 
 ---
 
 ## 📖 Overview
 
-Scout conducts OSINT research. Gathers provenance-backed intelligence on entities using free-first source workflows with optional escalation to paid sources.
+Scout is a core component of the Indigo system. See SKILL.md for operational details.
 
 ---
 
@@ -18,29 +18,15 @@ Scout conducts OSINT research. Gathers provenance-backed intelligence on entitie
 git clone https://github.com/indigokarasu/scout.git
 ```
 
-### 🛠️ Tool Surface
+### 🛠️ Configuration
 
-```
-scout.research_entity(name, type, ...)       🔎 Research person/company
-scout.gather_provenance(entity, ...)         📋 Gather sourced data
-scout.create_brief(entity, ...)              📄 Create research brief
-scout.verify_sources(...)                    ✓ Verify source credibility
-scout.escalate_to_paid(entity, ...)          💳 Escalate to paid sources
-```
+Read `SKILL.md` for:
+- ⚙️ Operational behavior
+- 🔗 Skill cooperation
+- 📋 Tool surface
+- 🔒 Privacy and data handling
 
-### 📤 Output
-
-- **scout_research** — Structured research findings
-- **scout_brief** — Provenance-backed brief with sources
-- **scout_summary** — Entity overview with key facts
-
----
-
-## ⚙️ Configuration
-
-Read `SKILL.md` for operational details, source management, and cooperation with other skills.
-
-Read `references/` for schemas and examples.
+Read `references/` for detailed schemas, heuristics, and examples.
 
 ---
 
