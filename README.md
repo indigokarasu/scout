@@ -1,12 +1,12 @@
-# 🔎 scout
+# scout
 
-Structured OSINT research on people, companies, and organizations. Provenance-backed briefs.
+🔎 Structured OSINT research on people, companies, and organizations. Provenance-backed briefs.
 
 ---
 
 ## 📖 Overview
 
-Scout handles core responsibilities in the Indigo system. See SKILL.md for operational details.
+Uscout handles core responsibilities in the Indigo system. See SKILL.md for operational details.
 
 ---
 
