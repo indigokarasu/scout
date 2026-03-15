@@ -1,17 +1,36 @@
-# Scout
+# 🔎 scout
 
-Structured OSINT research on people, companies, and organizations. Provenance-backed briefs using a free-first source waterfall. Escalates to paid sources only with explicit permission.
+Structured OSINT research on people, companies, and organizations. Provenance-backed briefs.
 
-## Repository Structure
+---
 
-- `ocas-scout/` - Skill package source
-- `spec/` - Specification and build documentation
+## 📖 Overview
 
-## Installation
+Scout handles core responsibilities in the Indigo system. See SKILL.md for operational details.
 
-This skill package is available on GitHub. To use it, clone this repository and follow the installation instructions in your skill management system.
+---
 
+## 🚀 Quick Start
 
-## License
+### 📦 Installation
+
+Clone into your skill management system:
+```bash
+git clone https://github.com/indigokarasu/scout.git
+```
+
+### 🛠️ Configuration
+
+Read `SKILL.md` for:
+- ⚙️ Operational behavior
+- 🔗 Skill cooperation
+- 📋 Tool surface
+- 🔒 Privacy and data handling
+
+Read `references/` for detailed schemas, heuristics, and examples.
+
+---
+
+## 📄 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
