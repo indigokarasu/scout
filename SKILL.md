@@ -30,6 +30,47 @@ Scout owns lawful OSINT research on people and organizations with provenance-bac
 
 Scout does not own: general topic research (Sift), image processing (Look), knowledge graph writes (Elephas), social graph (Weave), communications (Dispatch).
 
+
+## Functions
+
+### scout_research_start()
+
+**Purpose:** begin a new research request with subject and goal
+
+**Returns:** Operation result
+
+### scout_research_expand --tier <1|2|3>()
+
+**Purpose:** escalate to a higher source tier
+
+**Returns:** Operation result
+
+### scout_brief_render()
+
+**Purpose:** generate the final markdown brief with findings and sources
+
+**Returns:** Operation result
+
+### scout_brief_render_pdf()
+
+**Purpose:** optional PDF brief generation
+
+**Returns:** Operation result
+
+### scout_status()
+
+**Purpose:** return current research state
+
+**Returns:** Operation result
+
+### scout_journal()
+
+**Purpose:** write journal for the current run; called at end of every run
+
+**Returns:** Operation result
+
+
+
 ## Commands
 
 - `scout.research.start` — begin a new research request with subject and goal
