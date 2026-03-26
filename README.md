@@ -1,41 +1,53 @@
 # 🔍 Scout
 
-Lawful, provenance-backed OSINT research on people and organizations.
-
-**Skill name:** `ocas-scout`
-**Version:** 2.2.0
-**Type:** system
-**Layer:** Signal
-**Author:** Indigo Karasu
+Scout conducts lawful OSINT research on people, companies, and organizations, assembling provenance-backed briefs where every claim carries a source reference, retrieval timestamp, and direct quote. It works through a tiered source waterfall -- public web first, then rate-limited registries, then paid databases only with explicit permission -- collecting no more than the stated research goal requires.
 
 ---
 
-## Files
+## Overview
 
-| File | Purpose |
+Scout makes research provenance a first-class requirement. Every claim in a Scout brief traces to a source with URL, retrieval timestamp, and direct quote -- no unsupported assertions. It works through a tiered source waterfall: public web sources automatically, rate-limited registries if useful, paid OSINT databases only after explicit permission is recorded. Collection is bounded to what the stated research goal actually requires, and private details are suppressed unless explicitly permitted. Confirmed entities and relationships discovered during research are emitted as signal candidates to Chronicle.
+
+## Commands
+
+| Command | Description |
 |---|---|
-| `skill.json` | Package metadata and routing description |
-| `SKILL.md` | Operational instructions for the agent |
-| `references/` | Support files referenced by SKILL.md |
+| `scout.research.start` | Begin a new research request with subject and goal |
+| `scout.research.expand --tier <1\|2\|3>` | Escalate to a higher source tier |
+| `scout.brief.render` | Generate the final markdown brief with findings and sources |
+| `scout.brief.render_pdf` | Optional PDF brief generation |
+| `scout.status` | Current research state |
+| `scout.journal` | Write journal for the current run |
 
----
+## Setup
+
+`scout.init` runs automatically on first invocation and creates all required directories, config.json, and JSONL files. No manual setup is required. Scout is purely reactive -- no scheduled tasks.
+
+## Dependencies
+
+**OCAS Skills**
+- [Weave](https://github.com/indigokarasu/weave) -- social graph read-only for identity context
+- [Elephas](https://github.com/indigokarasu/elephas) -- receives Signal files for confirmed entities
+- [Sift](https://github.com/indigokarasu/sift) -- web searches during research
+
+**External**
+- Paid OSINT providers (Tier 3, optional -- requires explicit permission grant before use)
+
+## Scheduled Tasks
+
+This skill is purely reactive. No scheduled tasks.
 
 ## Changelog
 
-### 2.2.0 (2026-03-22)
+### v2.2.0 -- March 22, 2026
+- Routing improvements
 
-- Added short-name routing aliases to skill.json description and SKILL.md frontmatter for natural invocation ('Scout', 'Sift', etc.)
-- Added trigger phrases to descriptions for improved routing accuracy
-- Cross-skill references in descriptions now use 'use X' format for routing clarity
+### v2.1.0 -- March 22, 2026
+- Signal emission to Elephas for confirmed entities and relationships
+- Journaling as mandatory final step in every research run
 
-### 2.1.0 (2026-03-22)
+### v2.0.0 -- March 18, 2026
+- Initial release as part of the unified OCAS skill suite
+---
 
-- Added explicit signal emission step to research workflow (step 10) -- emits Signal files to Elephas intake for every confirmed entity
-- Added explicit journal write as final workflow step (step 11)
-- Added Initialization section with storage bootstrap and Elephas intake directory creation
-- Removed non-conformant OCAS_ROOT environment variable reference (spec-ocas-storage-conventions v1.2)
-- Changed signal emission language from permissive ('may write') to directive ('writes')
-
-### 2.0.0 (2026-03-18)
-
-- Initial build of all OCAS skills as a unified suite
+*Scout is part of the [OpenClaw Agent Suite](https://github.com/indigokarasu) -- a collection of interconnected skills for personal intelligence, autonomous research, and continuous self-improvement. Each skill owns a narrow responsibility and communicates with others through structured signal files, shared journals, and Chronicle, a long-term knowledge graph that accumulates verified facts over time.*
