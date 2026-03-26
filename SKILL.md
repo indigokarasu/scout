@@ -1,12 +1,14 @@
 ---
 name: ocas-scout
-description: Scout: structured OSINT research on people, companies, and organizations. Use when the user wants a provenance-backed brief, entity resolution across public sources, background research with cited sources, or a free-first research workflow that escalates to paid sources only with explicit permission. Trigger phrases: 'research this person', 'who is', 'background check', 'look up this company', 'what do we know about'. Do not use for topic research without a person/org focus (use Sift) or illegal data collection.
+source: https://github.com/indigokarasu/scout
+install: openclaw skill install https://github.com/indigokarasu/scout
+description: Use when researching a person, company, or organization with provenance-backed sources: building background briefs, resolving entity identity across public sources, compiling cited findings, or escalating through a free-first source waterfall. Trigger phrases: 'research this person', 'who is', 'background check', 'look up this company', 'what do we know about'. Do not use for topic research without a person/org focus (use Sift) or illegal data collection.
 metadata: {"openclaw":{"emoji":"🔍"}}
 ---
 
 # Scout
 
-Lawful, provenance-backed OSINT research on people, companies, and organizations. Produces concise auditable briefs using a free-first source waterfall.
+Scout conducts lawful OSINT research on people, companies, and organizations, assembling provenance-backed briefs where every claim carries a source reference, retrieval timestamp, and direct quote. It works through a tiered source waterfall — public web first, then rate-limited registries, then paid databases only with explicit permission — collecting no more than the stated research goal requires.
 
 ## When to use
 
@@ -29,47 +31,6 @@ Lawful, provenance-backed OSINT research on people, companies, and organizations
 Scout owns lawful OSINT research on people and organizations with provenance-backed output.
 
 Scout does not own: general topic research (Sift), image processing (Look), knowledge graph writes (Elephas), social graph (Weave), communications (Dispatch).
-
-
-## Functions
-
-### scout_research_start()
-
-**Purpose:** begin a new research request with subject and goal
-
-**Returns:** Operation result
-
-### scout_research_expand --tier <1|2|3>()
-
-**Purpose:** escalate to a higher source tier
-
-**Returns:** Operation result
-
-### scout_brief_render()
-
-**Purpose:** generate the final markdown brief with findings and sources
-
-**Returns:** Operation result
-
-### scout_brief_render_pdf()
-
-**Purpose:** optional PDF brief generation
-
-**Returns:** Operation result
-
-### scout_status()
-
-**Purpose:** return current research state
-
-**Returns:** Operation result
-
-### scout_journal()
-
-**Purpose:** write journal for the current run; called at end of every run
-
-**Returns:** Operation result
-
-
 
 ## Commands
 
@@ -226,8 +187,9 @@ Scout is purely reactive. No cron jobs or heartbeat entries.
 
 ## Support file map
 
-File | When to read
-`references/scout_schemas.md` | Before creating requests, findings, or briefs
-`references/scout_source_waterfall.md` | Before tier selection or escalation decisions
-`references/scout_brief_template.md` | Before rendering briefs
-`references/journal.md` | Before scout.journal; at end of every run
+| File | When to read |
+|---|---|
+| `references/scout_schemas.md` | Before creating requests, findings, or briefs |
+| `references/scout_source_waterfall.md` | Before tier selection or escalation decisions |
+| `references/scout_brief_template.md` | Before rendering briefs |
+| `references/journal.md` | Before scout.journal; at end of every run |
