@@ -18,10 +18,11 @@ Scout makes research provenance a first-class requirement. Every claim in a Scou
 | `scout.brief.render_pdf` | Optional PDF brief generation |
 | `scout.status` | Current research state |
 | `scout.journal` | Write journal for the current run |
+| `scout.update` | Pull latest from GitHub source (preserves journals and data) |
 
 ## Setup
 
-`scout.init` runs automatically on first invocation and creates all required directories, config.json, and JSONL files. No manual setup is required. Scout is purely reactive -- no scheduled tasks.
+`scout.init` runs automatically on first invocation and creates all required directories, config.json, and JSONL files. No manual setup is required. It also registers the `scout:update` cron job (midnight daily) for automatic self-updates.
 
 ## Dependencies
 
@@ -35,9 +36,14 @@ Scout makes research provenance a first-class requirement. Every claim in a Scou
 
 ## Scheduled Tasks
 
-This skill is purely reactive. No scheduled tasks.
+| Job | Mechanism | Schedule | Command |
+|---|---|---|---|
+| `scout:update` | cron | `0 0 * * *` (midnight daily) | Self-update from GitHub source |
 
 ## Changelog
+
+### v2.2.1 -- March 27, 2026
+- Added `scout.update` command and midnight cron for automatic version-checked self-updates
 
 ### v2.2.0 -- March 22, 2026
 - Routing improvements
