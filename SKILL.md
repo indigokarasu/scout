@@ -115,7 +115,7 @@ Default config.json:
 ```json
 {
   "skill_id": "ocas-scout",
-  "skill_version": "2.2.0",
+  "skill_version": "2.3.0",
   "config_version": "1",
   "created_at": "",
   "updated_at": "",
