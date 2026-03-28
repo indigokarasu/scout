@@ -2,7 +2,7 @@
 name: ocas-scout
 source: https://github.com/indigokarasu/scout
 install: openclaw skill install https://github.com/indigokarasu/scout
-description: Use when researching a person, company, or organization with provenance-backed sources: building background briefs, resolving entity identity across public sources, compiling cited findings, or escalating through a free-first source waterfall. Trigger phrases: 'research this person', 'who is', 'background check', 'look up this company', 'what do we know about'. Do not use for topic research without a person/org focus (use Sift) or illegal data collection.
+description: Use when researching a person, company, or organization with provenance-backed sources: building background briefs, resolving entity identity across public sources, compiling cited findings, or escalating through a free-first source waterfall. Trigger phrases: 'research this person', 'who is', 'background check', 'look up this company', 'what do we know about', 'update scout'. Do not use for topic research without a person/org focus (use Sift) or illegal data collection.
 metadata: {"openclaw":{"emoji":"🔍"}}
 ---
 
