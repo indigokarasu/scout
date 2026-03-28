@@ -11,7 +11,26 @@
     ],
     "write": [
       "~/openclaw/data/ocas-scout/",
-      "~/openclaw/journals/ocas-scout/"
+      "~/openclaw/journals/ocas-scout/",
+      "~/openclaw/db/ocas-elephas/intake/"
     ]
-  }
+  },
+  "self_update": {
+    "source": "https://github.com/indigokarasu/scout",
+    "mechanism": "version-checked tarball from GitHub via gh CLI",
+    "command": "scout.update",
+    "requires_binaries": [
+      "gh",
+      "tar",
+      "python3"
+    ]
+  },
+  "scheduled_tasks": [
+    {
+      "name": "scout:update",
+      "schedule": "0 0 * * *",
+      "command": "scout.update",
+      "description": "Self-update from GitHub source"
+    }
+  ]
 }
