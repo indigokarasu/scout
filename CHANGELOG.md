@@ -1,8 +1,12 @@
-# Changelog
+# CHANGELOG
 
-## [2.4.0] - 2026-03-30
+## 2.5.0 — 2026-03-30
 
 ### Added
-- `scout:research` background task: weekly OSINT research run every Monday at 9am PT (`0 9 * * 1`, command `scout.research`). Declared in `## Background tasks` for Custodian auto-registration.
+- `references/plans/contact-enrichment.plan.md` — bundled workflow plan: Weave lookup → Scout research → Weave social graph update
+- Ontology mapping: Scout extracts Entity/Person, Entity/AI, and Thing/DigitalArtifact types
+- Weave cooperative read interface documented in Optional skill cooperation
 
-## [2.3.1] - prior release
+## Prior
+
+See git log for earlier history.
