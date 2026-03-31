@@ -190,9 +190,11 @@ On first invocation of any Scout command, run `scout.init`:
 | Job name | Mechanism | Schedule | Command |
 |---|---|---|---|
 | `scout:update` | cron | `0 0 * * *` (midnight daily) | `scout.update` |
+| `scout:research` | cron | `0 9 * * 1` (Monday 9am) | `scout.research` |
 
 ```
 openclaw cron add --name scout:update --schedule "0 0 * * *" --command "scout.update" --sessionTarget isolated --lightContext true --timezone America/Los_Angeles
+openclaw cron add --name scout:research --schedule "0 9 * * 1" --command "scout.research" --sessionTarget isolated --lightContext true --timezone America/Los_Angeles
 ```
 
 
