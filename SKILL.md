@@ -32,6 +32,16 @@ Scout owns lawful OSINT research on people and organizations with provenance-bac
 
 Scout does not own: general topic research (Sift), image processing (Look), knowledge graph writes (Elephas), social graph (Weave), communications (Dispatch).
 
+## Ontology types
+
+Scout works with these types from `spec-ocas-ontology.md`:
+
+- **Entity/Person** — people and their public profiles. The primary entity type Scout extracts.
+- **Entity/AI** — AI agents or organizations when relevant to research.
+- **Thing/DigitalArtifact** — public documents, profiles, and digital records found during research.
+
+Scout emits Signals to Elephas after each completed research request, for each extracted entity with confidence ≥ med. Signal `payload.type` is `"Person"` or `"AI"`. `source_journal_type` is `"Research"`.
+
 ## Commands
 
 - `scout.research.start` — begin a new research request with subject and goal
@@ -163,6 +173,7 @@ skill_okrs:
 - Weave — read social graph (read-only) for identity context
 - Elephas — optionally emit Signal files for Chronicle promotion
 - Sift — may use Sift for web searches during research
+- Weave — read social graph for identity context before research (read-only; see `spec-ocas-interfaces.md` Cooperative Query Interfaces)
 
 ## Journal outputs
 
