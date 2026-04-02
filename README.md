@@ -42,6 +42,10 @@ Scout makes research provenance a first-class requirement. Every claim in a Scou
 
 ## Changelog
 
+### v2.6.0 -- April 2, 2026
+- Added `user_relevance` field on all emitted Elephas signals (default `agent_only` for research, `user` when user-requested)
+- Structured entity observations in journal payloads (`entities_observed` with relevance tags)
+
 ### v2.3.0 -- March 27, 2026
 - Added `scout.update` command and midnight cron for automatic version-checked self-updates
 
