@@ -40,7 +40,38 @@ Scout works with these types from `spec-ocas-ontology.md`:
 - **Entity/AI** — AI agents or organizations when relevant to research.
 - **Thing/DigitalArtifact** — public documents, profiles, and digital records found during research.
 
-Scout emits Signals to Elephas after each completed research request, for each extracted entity with confidence ≥ med. Signal `payload.type` is `"Person"` or `"AI"`. `source_journal_type` is `"Research"`.
+Scout emits Signals to Elephas after each completed research request, for each extracted entity with confidence ≥ med. Signal `payload.type` is `"Person"` or `"AI"`. `source_journal_type` is `"Research"`. Every emitted Signal must include a `user_relevance` field.
+
+### user_relevance field
+
+Every Signal emitted by Scout carries a `user_relevance` field with one of two values:
+
+- `"user"` — the signal is relevant to the user's personal knowledge graph
+- `"agent_only"` — the signal is agent-initiated research with no demonstrated user connection
+
+**Default is `"agent_only"`** because most Scout research is agent-initiated (e.g., scheduled weekly runs, background enrichment). A signal receives `user_relevance: "user"` only when:
+
+1. The user explicitly requested the research (e.g., "research this person", "who is X", or any direct user prompt that triggered the run), OR
+2. The entity has a demonstrated connection to an entity already in Chronicle with `user_relevance: "user"` (check Chronicle before emitting if feasible).
+
+When in doubt, default to `"agent_only"`. Elephas can promote later if a user connection is established.
+
+Signal example:
+```json
+{
+  "signal_id": "sig-scout-20260402-001",
+  "source_skill": "ocas-scout",
+  "source_journal_type": "Research",
+  "emitted_at": "2026-04-02T14:30:00Z",
+  "user_relevance": "agent_only",
+  "payload": {
+    "type": "Person",
+    "name": "Jane Doe",
+    "confidence": "high",
+    "source_refs": ["https://example.com/profile"]
+  }
+}
+```
 
 ## Commands
 
@@ -78,7 +109,7 @@ Read `references/scout_schemas.md` for exact schema.
 7. Escalate to Tier 3 only after explicit permission grant is recorded
 8. Generate brief with findings, uncertainty, and source log
 9. Store request, findings, sources, and decisions locally
-10. Emit Signal files for confirmed entities and relationships to `~/openclaw/db/ocas-elephas/intake/{signal_id}.signal.json`. Use Signal schema from `spec-ocas-shared-schemas.md`. One file per entity or relationship with sufficient confidence.
+10. Emit Signal files for confirmed entities and relationships to `~/openclaw/db/ocas-elephas/intake/{signal_id}.signal.json`. Use Signal schema from `spec-ocas-shared-schemas.md`. One file per entity or relationship with sufficient confidence. Every Signal must include `user_relevance` (see Ontology types section). Set `"user"` if the run was user-initiated or the entity connects to a `user_relevance: "user"` Chronicle entry; otherwise `"agent_only"`.
 11. Write journal via `scout.journal`
 
 When `minimize_pii=true`, suppress unnecessary sensitive details in the final brief.
@@ -99,7 +130,7 @@ Markdown brief with: Executive Summary, Identity Resolution Notes, Findings, Ris
 
 Scout writes Signal files to Elephas intake: `~/openclaw/db/ocas-elephas/intake/{signal_id}.signal.json`
 
-Emit one Signal file per confirmed entity or high-confidence relationship discovered during research. Use the Signal schema from `spec-ocas-shared-schemas.md`. Elephas decides promotion.
+Emit one Signal file per confirmed entity or high-confidence relationship discovered during research. Use the Signal schema from `spec-ocas-shared-schemas.md`. Every Signal must include the `user_relevance` field (`"user"` or `"agent_only"`). Elephas decides promotion.
 
 See `spec-ocas-interfaces.md` for signal format.
 
@@ -179,6 +210,17 @@ skill_okrs:
 
 - Observation Journal — research runs producing findings
 - Research Journal — structured multi-source research sessions
+
+Journals must include an `entities_observed` array listing every entity encountered during the run, each tagged with its relevance:
+
+```json
+{
+  "entities_observed": [
+    { "name": "Jane Doe", "type": "Person", "confidence": "high", "user_relevance": "user" },
+    { "name": "Acme Corp", "type": "Organization", "confidence": "med", "user_relevance": "agent_only" }
+  ]
+}
+```
 
 ## Visibility
 
