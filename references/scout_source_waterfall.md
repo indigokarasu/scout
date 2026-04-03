@@ -12,25 +12,17 @@ Behavior: runs automatically on every research request. No permission required.
 
 Minimization: collect only what the goal requires. Do not harvest all available data.
 
-### Parallel Search with Agent-Reach
+### Platform Search via Sift
 
-Tier 1 now runs **agent-reach** in parallel with Tavily/DuckDuckGo web search:
+Tier 1 benefits from Sift's shared search stack, which runs **agent-reach** platform search in parallel with web providers (Brave/DuckDuckGo). When Scout delegates web search queries, results automatically include platform-native content from Twitter/X, Reddit, LinkedIn, GitHub, Weibo, WeChat Articles, Bilibili, YouTube, and more.
 
-- **Tavily**: General web search, news, official sites, documents
-- **Agent-reach**: Platform-native search (Twitter/X, Reddit, LinkedIn, GitHub, Weibo, WeChat Articles, etc.)
-
-Execution:
-1. Query issued to Tavily (primary) AND agent-reach (platform search)
-2. Results collected concurrently
-3. Deduplication by URL and content hash
-4. Merged into unified source pool
+See Sift's `references/search_tiers.md` for the full parallel execution model and deduplication logic.
 
 Benefits:
 - Broader OSINT coverage across social platforms
 - Platform-native content not indexed by general search
 - No additional latency (parallel execution)
-
-Fallback: If agent-reach fails or rate-limited, Tavily results are sufficient for Tier 1 completion.
+- Shared infrastructure — improvements to Sift's search benefit all skills
 
 ## Tier 2 — Extended Sources (Config-Gated)
 

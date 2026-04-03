@@ -102,7 +102,7 @@ Read `references/scout_schemas.md` for exact schema.
 
 1. Normalize request and subject identity inputs
 2. Resolve likely identity matches conservatively
-3. Run Tier 1 public-source collection (Tavily + agent-reach in parallel)
+3. Run Tier 1 public-source collection (via Sift shared search stack)
 4. Record provenance for every retained claim
 5. Compile preliminary findings with confidence levels
 6. Escalate to Tier 2 only if enabled and useful
@@ -118,7 +118,7 @@ When `minimize_pii=true`, suppress unnecessary sensitive details in the final br
 
 Read `references/scout_source_waterfall.md` for full tier logic.
 
-- **Tier 1** — public web (Tavily/DuckDuckGo) + platform search (agent-reach). Runs in parallel. Automatic.
+- **Tier 1** — public web + platform search via Sift's shared search stack (includes agent-reach). Automatic.
 - **Tier 2** — rate-limited sources, registries, extended datasets. Only if enabled and useful.
 - **Tier 3** — paid OSINT providers, background databases. Requires explicit permission grant.
 
