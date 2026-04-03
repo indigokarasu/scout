@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [2.7.1] - 2026-04-02
+
+### Changed
+- Aligned Tier 1 platform search with Sift's shared search stack (agent-reach now provided by Sift)
+- Scout no longer implements its own parallel search — delegates to Sift infrastructure
+
 ## [2.7.0] - 2026-04-02
 
 ### Added
