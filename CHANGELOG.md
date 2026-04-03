@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## [2.7.0] - 2026-04-02
+
+### Added
+- Tier 1 parallel search with agent-reach: Tavily/DuckDuckGo + platform search (Twitter/X, Reddit, LinkedIn, GitHub, Weibo, etc.)
+- Deduplication by URL and content hash for merged search results
+- Source waterfall updated to document parallel execution model
+
 ## [2.6.0] - 2026-04-02
 
 ### Added

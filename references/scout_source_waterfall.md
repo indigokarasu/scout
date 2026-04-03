@@ -12,6 +12,26 @@ Behavior: runs automatically on every research request. No permission required.
 
 Minimization: collect only what the goal requires. Do not harvest all available data.
 
+### Parallel Search with Agent-Reach
+
+Tier 1 now runs **agent-reach** in parallel with Tavily/DuckDuckGo web search:
+
+- **Tavily**: General web search, news, official sites, documents
+- **Agent-reach**: Platform-native search (Twitter/X, Reddit, LinkedIn, GitHub, Weibo, WeChat Articles, etc.)
+
+Execution:
+1. Query issued to Tavily (primary) AND agent-reach (platform search)
+2. Results collected concurrently
+3. Deduplication by URL and content hash
+4. Merged into unified source pool
+
+Benefits:
+- Broader OSINT coverage across social platforms
+- Platform-native content not indexed by general search
+- No additional latency (parallel execution)
+
+Fallback: If agent-reach fails or rate-limited, Tavily results are sufficient for Tier 1 completion.
+
 ## Tier 2 — Extended Sources (Config-Gated)
 
 Sources: rate-limited APIs, business registries, extended public datasets, professional directories.
