@@ -279,3 +279,13 @@ openclaw cron add --name scout:research --schedule "0 9 * * 1" --command "scout.
 | `references/scout_source_waterfall.md` | Before tier selection or escalation decisions |
 | `references/scout_brief_template.md` | Before rendering briefs |
 | `references/journal.md` | Before scout.journal; at end of every run |
+
+## Update command
+
+This skill self-updates every 24 hours via:
+
+```bash
+openclaw scout.update
+```
+
+This pulls the latest version from GitHub and restarts the skill's background tasks if applicable.
