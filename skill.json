@@ -1,0 +1,53 @@
+{
+  "name": "ocas-scout",
+  "version": "2.8.0",
+  "description": "Scout: structured OSINT research on people, companies, and organizations. Use when the user wants a provenance-backed brief, entity resolution across public sources, background research with cited sources, or a free-first research workflow that escalates to paid sources only with explicit permission. Trigger phrases: 'research this person', 'who is', 'background check', 'look up this company', 'what do we know about', 'update scout'. Do not use for topic research without a person/org focus (use Sift) or illegal data collection.",
+  "author": "Indigo Karasu",
+  "email": "mx.indigo.karasu@gmail.com",
+  "skill_type": "system",
+  "requires": {
+    "credentials": [
+      {
+        "name": "hunter_api_key",
+        "description": "Hunter.io API key for professional email discovery and verification",
+        "required": false,
+        "note": "Free tier: 50 requests/month. Set up during scout.init. Skipped silently if not configured."
+      }
+    ]
+  },
+  "filesystem": {
+    "read": [
+      "~/openclaw/data/ocas-scout/",
+      "~/openclaw/journals/ocas-scout/"
+    ],
+    "write": [
+      "~/openclaw/data/ocas-scout/",
+      "~/openclaw/journals/ocas-scout/",
+      "~/openclaw/db/ocas-elephas/intake/"
+    ]
+  },
+  "self_update": {
+    "source": "https://github.com/indigokarasu/scout",
+    "mechanism": "version-checked tarball from GitHub via gh CLI",
+    "command": "scout.update",
+    "requires_binaries": [
+      "gh",
+      "tar",
+      "python3"
+    ]
+  },
+  "scheduled_tasks": [
+    {
+      "name": "scout:update",
+      "schedule": "0 0 * * *",
+      "command": "scout.update",
+      "description": "Self-update from GitHub source"
+    },
+    {
+      "name": "scout:research",
+      "schedule": "0 9 * * 1",
+      "command": "scout.research",
+      "description": "Weekly OSINT research run (Monday 9am PT)"
+    }
+  ]
+}
