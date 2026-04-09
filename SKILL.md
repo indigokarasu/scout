@@ -1,9 +1,56 @@
 ---
 name: ocas-scout
-source: https://github.com/indigokarasu/scout
-install: openclaw skill install https://github.com/indigokarasu/scout
-description: Use when researching a person, company, or organization with provenance-backed sources: building background briefs, resolving entity identity across public sources, compiling cited findings, or escalating through a free-first source waterfall. Trigger phrases: 'research this person', 'who is', 'background check', 'look up this company', 'what do we know about', 'update scout'. Do not use for topic research without a person/org focus (use Sift) or illegal data collection.
-metadata: {"openclaw":{"emoji":"🔍"}}
+description: >
+  Scout: structured OSINT research on people, companies, and organizations.
+  Use when the user wants a provenance-backed brief, entity resolution across
+  public sources, background research with cited sources, or a free-first
+  research workflow that escalates to paid sources only with explicit
+  permission. Trigger phrases: 'research this person', 'who is', 'background
+  check', 'look up this company', 'what do we know about', 'update scout'. Do
+  not use for topic research without a person/org focus (use Sift) or illegal
+  data collection.
+metadata:
+  author: Indigo Karasu
+  email: mx.indigo.karasu@gmail.com
+  version: "2.9.0"
+  hermes:
+    tags: [research, osint, people]
+    category: signal
+    cron:
+      - name: "scout:update"
+        schedule: "0 0 * * *"
+        command: "scout.update"
+      - name: "scout:research"
+        schedule: "0 9 * * 1"
+        command: "scout.research"
+  openclaw:
+    skill_type: system
+    visibility: public
+    filesystem:
+      read:
+        - "$OCAS_DATA_ROOT/data/ocas-scout/"
+        - "$OCAS_DATA_ROOT/journals/ocas-scout/"
+      write:
+        - "$OCAS_DATA_ROOT/data/ocas-scout/"
+        - "$OCAS_DATA_ROOT/journals/ocas-scout/"
+        - "$OCAS_DATA_ROOT/db/ocas-elephas/intake/"
+    self_update:
+      source: "https://github.com/indigokarasu/scout"
+      mechanism: "version-checked tarball from GitHub via gh CLI"
+      command: "scout.update"
+      requires_binaries: [gh, tar, python3]
+    requires:
+      credentials:
+        - name: "hunter_api_key"
+          description: "Hunter.io API key for professional email discovery and verification"
+          required: false
+    cron:
+      - name: "scout:update"
+        schedule: "0 0 * * *"
+        command: "scout.update"
+      - name: "scout:research"
+        schedule: "0 9 * * 1"
+        command: "scout.research"
 ---
 
 # Scout
@@ -109,7 +156,7 @@ Read `references/scout_schemas.md` for exact schema.
 7. Escalate to Tier 3 only after explicit permission grant is recorded
 8. Generate brief with findings, uncertainty, and source log
 9. Store request, findings, sources, and decisions locally
-10. Emit Signal files for confirmed entities and relationships to `~/openclaw/db/ocas-elephas/intake/{signal_id}.signal.json`. Use Signal schema from `spec-ocas-shared-schemas.md`. One file per entity or relationship with sufficient confidence. Every Signal must include `user_relevance` (see Ontology types section). Set `"user"` if the run was user-initiated or the entity connects to a `user_relevance: "user"` Chronicle entry; otherwise `"agent_only"`.
+10. Emit Signal files for confirmed entities and relationships to `$OCAS_DATA_ROOT/db/ocas-elephas/intake/{signal_id}.signal.json`. Use Signal schema from `spec-ocas-shared-schemas.md`. One file per entity or relationship with sufficient confidence. Every Signal must include `user_relevance` (see Ontology types section). Set `"user"` if the run was user-initiated or the entity connects to a `user_relevance: "user"` Chronicle entry; otherwise `"agent_only"`.
 11. Write journal via `scout.journal`
 
 When `minimize_pii=true`, suppress unnecessary sensitive details in the final brief.
@@ -136,7 +183,7 @@ Markdown brief with: Executive Summary, Identity Resolution Notes, Findings, Pro
 
 ## Inter-skill interfaces
 
-Scout writes Signal files to Elephas intake: `~/openclaw/db/ocas-elephas/intake/{signal_id}.signal.json`
+Scout writes Signal files to Elephas intake: `$OCAS_DATA_ROOT/db/ocas-elephas/intake/{signal_id}.signal.json`
 
 Emit one Signal file per confirmed entity or high-confidence relationship discovered during research. Use the Signal schema from `spec-ocas-shared-schemas.md`. Every Signal must include the `user_relevance` field (`"user"` or `"agent_only"`). Elephas decides promotion.
 
@@ -145,7 +192,7 @@ See `spec-ocas-interfaces.md` for signal format.
 ## Storage layout
 
 ```
-~/openclaw/data/ocas-scout/
+$OCAS_DATA_ROOT/data/ocas-scout/
   config.json
   requests.jsonl
   sources.jsonl
@@ -154,7 +201,7 @@ See `spec-ocas-interfaces.md` for signal format.
   briefs/
   reports/
 
-~/openclaw/journals/ocas-scout/
+$OCAS_DATA_ROOT/journals/ocas-scout/
   YYYY-MM-DD/
     {run_id}.json
 ```
@@ -238,12 +285,12 @@ public
 
 On first invocation of any Scout command, run `scout.init`:
 
-1. Create `~/openclaw/data/ocas-scout/` and all subdirectories (`briefs/`, `reports/`)
+1. Create `$OCAS_DATA_ROOT/data/ocas-scout/` and all subdirectories (`briefs/`, `reports/`)
 2. Write default `config.json` with ConfigBase fields if absent
 3. Create empty JSONL files: `requests.jsonl`, `sources.jsonl`, `findings.jsonl`, `decisions.jsonl`
-4. Create `~/openclaw/journals/ocas-scout/`
-5. Ensure `~/openclaw/db/ocas-elephas/intake/` exists (create if missing)
-6. Register cron job `scout:update` if not already present (check `openclaw cron list` first)
+4. Create `$OCAS_DATA_ROOT/journals/ocas-scout/`
+5. Ensure `$OCAS_DATA_ROOT/db/ocas-elephas/intake/` exists (create if missing)
+6. Register cron job `scout:update` if not already present (check the platform scheduling registry first)
 7. Log initialization as a DecisionRecord in `decisions.jsonl`
 8. **Hunter.io setup** (run once; skip if `HUNTER_API_KEY` already set in environment):
    - Check environment: `echo $HUNTER_API_KEY`
@@ -261,8 +308,8 @@ On first invocation of any Scout command, run `scout.init`:
 | `scout:research` | cron | `0 9 * * 1` (Monday 9am) | `scout.research` |
 
 ```
-openclaw cron add --name scout:update --schedule "0 0 * * *" --command "scout.update" --sessionTarget isolated --lightContext true --timezone America/Los_Angeles
-openclaw cron add --name scout:research --schedule "0 9 * * 1" --command "scout.research" --sessionTarget isolated --lightContext true --timezone America/Los_Angeles
+# Task declared in SKILL.md frontmatter metadata.{platform}.cron
+# Task declared in SKILL.md frontmatter metadata.{platform}.cron
 ```
 
 
