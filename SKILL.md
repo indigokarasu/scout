@@ -12,7 +12,7 @@ description: >
 metadata:
   author: Indigo Karasu
   email: mx.indigo.karasu@gmail.com
-  version: "2.9.0"
+  version: "2.9.1"
   hermes:
     tags: [research, osint, people]
     category: signal
@@ -28,12 +28,11 @@ metadata:
     visibility: public
     filesystem:
       read:
-        - "$OCAS_DATA_ROOT/data/ocas-scout/"
-        - "$OCAS_DATA_ROOT/journals/ocas-scout/"
+        - "{agent_root}/commons/data/ocas-scout/"
+        - "{agent_root}/commons/journals/ocas-scout/"
       write:
-        - "$OCAS_DATA_ROOT/data/ocas-scout/"
-        - "$OCAS_DATA_ROOT/journals/ocas-scout/"
-        - "$OCAS_DATA_ROOT/db/ocas-elephas/intake/"
+        - "{agent_root}/commons/data/ocas-scout/"
+        - "{agent_root}/commons/journals/ocas-scout/"
     self_update:
       source: "https://github.com/indigokarasu/scout"
       mechanism: "version-checked tarball from GitHub via gh CLI"
@@ -156,7 +155,7 @@ Read `references/scout_schemas.md` for exact schema.
 7. Escalate to Tier 3 only after explicit permission grant is recorded
 8. Generate brief with findings, uncertainty, and source log
 9. Store request, findings, sources, and decisions locally
-10. Emit Signal files for confirmed entities and relationships to `$OCAS_DATA_ROOT/db/ocas-elephas/intake/{signal_id}.signal.json`. Use Signal schema from `spec-ocas-shared-schemas.md`. One file per entity or relationship with sufficient confidence. Every Signal must include `user_relevance` (see Ontology types section). Set `"user"` if the run was user-initiated or the entity connects to a `user_relevance: "user"` Chronicle entry; otherwise `"agent_only"`.
+10. Emit Signal files for confirmed entities and relationships to the `signal` payload field in the journal entry. Use Signal schema from `spec-ocas-shared-schemas.md`. One file per entity or relationship with sufficient confidence. Every Signal must include `user_relevance` (see Ontology types section). Set `"user"` if the run was user-initiated or the entity connects to a `user_relevance: "user"` Chronicle entry; otherwise `"agent_only"`.
 11. Write journal via `scout.journal`
 
 When `minimize_pii=true`, suppress unnecessary sensitive details in the final brief.
@@ -183,7 +182,7 @@ Markdown brief with: Executive Summary, Identity Resolution Notes, Findings, Pro
 
 ## Inter-skill interfaces
 
-Scout writes Signal files to Elephas intake: `$OCAS_DATA_ROOT/db/ocas-elephas/intake/{signal_id}.signal.json`
+Scout writes Signal files to Elephas (via journal signal payload): the `signal` payload field in the journal entry
 
 Emit one Signal file per confirmed entity or high-confidence relationship discovered during research. Use the Signal schema from `spec-ocas-shared-schemas.md`. Every Signal must include the `user_relevance` field (`"user"` or `"agent_only"`). Elephas decides promotion.
 
@@ -192,7 +191,7 @@ See `spec-ocas-interfaces.md` for signal format.
 ## Storage layout
 
 ```
-$OCAS_DATA_ROOT/data/ocas-scout/
+{agent_root}/commons/data/ocas-scout/
   config.json
   requests.jsonl
   sources.jsonl
@@ -201,7 +200,7 @@ $OCAS_DATA_ROOT/data/ocas-scout/
   briefs/
   reports/
 
-$OCAS_DATA_ROOT/journals/ocas-scout/
+{agent_root}/commons/journals/ocas-scout/
   YYYY-MM-DD/
     {run_id}.json
 ```
@@ -285,11 +284,11 @@ public
 
 On first invocation of any Scout command, run `scout.init`:
 
-1. Create `$OCAS_DATA_ROOT/data/ocas-scout/` and all subdirectories (`briefs/`, `reports/`)
+1. Create `{agent_root}/commons/data/ocas-scout/` and all subdirectories (`briefs/`, `reports/`)
 2. Write default `config.json` with ConfigBase fields if absent
 3. Create empty JSONL files: `requests.jsonl`, `sources.jsonl`, `findings.jsonl`, `decisions.jsonl`
-4. Create `$OCAS_DATA_ROOT/journals/ocas-scout/`
-5. Ensure `$OCAS_DATA_ROOT/db/ocas-elephas/intake/` exists (create if missing)
+4. Create `{agent_root}/commons/journals/ocas-scout/`
+5. Ensure journal payload fields (see interfaces specification) exists (create if missing)
 6. Register cron job `scout:update` if not already present (check the platform scheduling registry first)
 7. Log initialization as a DecisionRecord in `decisions.jsonl`
 8. **Hunter.io setup** (run once; skip if `HUNTER_API_KEY` already set in environment):
