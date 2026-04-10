@@ -12,7 +12,7 @@ description: >
 metadata:
   author: Indigo Karasu
   email: mx.indigo.karasu@gmail.com
-  version: "2.9.1"
+  version: "2.9.2"
   hermes:
     tags: [research, osint, people]
     category: signal
@@ -296,7 +296,7 @@ On first invocation of any Scout command, run `scout.init`:
    - If empty: open `https://hunter.io/users/sign_up` in browser
    - Guide free account creation (no credit card required)
    - After signup, navigate to `https://hunter.io/api-keys`
-   - Copy API key and store: add `HUNTER_API_KEY=<key>` to OpenClaw environment config
+   - Copy API key and store: add `HUNTER_API_KEY=<key>` to platform environment config
    - Free tier provides 50 requests/month (sufficient for OSINT work)
 
 ## Background tasks
@@ -346,7 +346,7 @@ On first invocation of any Scout command, run `scout.init`:
 This skill self-updates every 24 hours via:
 
 ```bash
-openclaw scout.update
+scout.update
 ```
 
 This pulls the latest version from GitHub and restarts the skill's background tasks if applicable.
