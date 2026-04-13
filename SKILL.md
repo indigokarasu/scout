@@ -37,7 +37,7 @@ metadata:
       source: "https://github.com/indigokarasu/scout"
       mechanism: "version-checked tarball from GitHub via gh CLI"
       command: "scout.update"
-      requires_binaries: [gh, tar, python3]
+      requires_binaries: [gh, tar]
     requires:
       credentials:
         - name: "hunter_api_key"
@@ -137,6 +137,9 @@ Signal example:
 4. Paid sources require explicit permission — Tier 3 needs a recorded PermissionGrant
 5. No doxxing by default — private details suppressed unless explicitly permitted
 6. Uncertainty must be surfaced — incomplete identity resolution stated clearly
+7. Identity gate — a profile found via handle expansion is `verified` only when 2+ data points from the seed overlap (e.g., name + location, name + bio keywords). A username match alone is `unverified_lead`; exclude unverified leads from final synthesis
+8. Tiered verification — Sherlock results processed in tiers: top 3 verified immediately, 2-3 sampled, remainder only on explicit user request
+9. Recursion cap — recursive handle discovery (a verified profile reveals a new handle) is allowed for one additional pass; hard cap at 2 Sherlock passes total per research request
 
 ## Input contract
 
@@ -149,14 +152,24 @@ Read `references/scout_schemas.md` for exact schema.
 1. Normalize request and subject identity inputs
 2. Resolve likely identity matches conservatively
 3. Run Tier 1 public-source collection (via Sift shared search stack)
-4. Record provenance for every retained claim
-5. Compile preliminary findings with confidence levels
-6. Escalate to Tier 2 only if enabled and useful
-7. Escalate to Tier 3 only after explicit permission grant is recorded
-8. Generate brief with findings, uncertainty, and source log
-9. Store request, findings, sources, and decisions locally
-10. Emit Signal files for confirmed entities and relationships to the `signal` payload field in the journal entry. Use Signal schema from `spec-ocas-shared-schemas.md`. One file per entity or relationship with sufficient confidence. Every Signal must include `user_relevance` (see Ontology types section). Set `"user"` if the run was user-initiated or the entity connects to a `user_relevance: "user"` Chronicle entry; otherwise `"agent_only"`.
-11. Write journal via `scout.journal`
+4. **Extract high-confidence handles** — from Tier 1 results, identify: any unique string preceded by `@`, usernames in URL paths (e.g., `github.com/username`), and strings explicitly labeled as social aliases. Deduplicate handles before proceeding.
+5. **Sherlock expansion** — if one or more handles found:
+   - If `sherlock` skill is installed: call `sherlock(handle)` for each unique handle
+   - If Sherlock is not installed: fall back to targeted `sift.search("site:<platform> '<handle>'")` across the top 5 platforms (GitHub, LinkedIn, X, Instagram, Reddit); limit to avoid rate exhaustion
+   - Filter results to high-value tiers — Dev: GitHub, StackOverflow; Professional: LinkedIn, Medium; Social: X, Instagram, Reddit
+   - **Tiered verification** (invariant 8): call `sift.extract(url)` on the top 3 results immediately; sample 2-3 others; surface remaining URLs in the brief as "unverified leads — available on request"
+   - **Identity gate** (invariant 7): require 2+ overlapping data points from seed (name + location, name + bio keywords, etc.) to mark a profile `verified`; label all others `unverified_lead` and exclude from synthesis
+   - **Recursive discovery** (invariant 9): if a `verified` profile reveals a new handle not in the original seed, run one additional Sherlock/Sift pass on that handle; stop after 2 total passes
+6. Record provenance for every retained claim
+7. Compile preliminary findings with confidence levels
+8. Escalate to Tier 2 only if enabled and useful
+9. Escalate to Tier 3 only after explicit permission grant is recorded
+10. Generate brief with findings, uncertainty, and source log
+    - If Sherlock/handle expansion produced results: include a **Social Graph** section (see Output requirements)
+    - Near-match flag: if a profile matches the name but contradicts a known seed attribute (e.g., different city), surface it explicitly rather than discarding: *"Found a [Platform] profile with a matching name but listed in [Location] rather than [expected]. Flag as possible alt-account?"*
+11. Store request, findings, sources, and decisions locally
+12. Emit Signal files for confirmed entities and relationships to the `signal` payload field in the journal entry. Use Signal schema from `spec-ocas-shared-schemas.md`. One file per entity or relationship with sufficient confidence. Every Signal must include `user_relevance` (see Ontology types section). Set `"user"` if the run was user-initiated or the entity connects to a `user_relevance: "user"` Chronicle entry; otherwise `"agent_only"`. When social graph data is present, include `social_graph` in the Signal payload (handles array and verified profiles list with platform, url, status, discovery_method, verification_evidence).
+13. Write journal via `scout.journal`
 
 When `minimize_pii=true`, suppress unnecessary sensitive details in the final brief.
 
@@ -173,7 +186,12 @@ All configured sources fire in parallel. Results are merged and deduplicated. A 
 
 ## Output requirements
 
-Markdown brief with: Executive Summary, Identity Resolution Notes, Findings, Professional Contacts (if Hunter results available), Risk and Uncertainty, Source Log. Every finding carries source-backed provenance.
+Markdown brief with: Executive Summary, Identity Resolution Notes, Findings, Social Graph (if handle expansion ran), Professional Contacts (if Hunter results available), Risk and Uncertainty, Source Log. Every finding carries source-backed provenance.
+
+**Social Graph section** (included when handle expansion or Sherlock ran):
+- List verified profiles: platform, URL, discovery method (sherlock / sift-dork), verification evidence (which two data points matched)
+- List unverified leads separately with a note that they are available for further investigation on request
+- Omit this section entirely if no handles were found
 
 **Professional Contacts section** (included when Hunter returns results):
 - List each discovered email with: address, confidence score (Hunter-native 0–100), type (`personal` or `generic`), source count
@@ -255,10 +273,10 @@ skill_okrs:
 
 ## Optional skill cooperation
 
-- Weave — read social graph (read-only) for identity context
-- Elephas — optionally emit Signal files for Chronicle promotion
-- Sift — may use Sift for web searches during research
+- **Sherlock** — username-to-platform expansion. Check at runtime via the platform skill registry. If installed, called during handle expansion phase (step 5). If absent, Scout falls back to targeted `sift.search("site:<platform> '<handle>'")` queries across top-5 platforms.
+- Sift — web search during Tier 1 collection and Sift-dork fallback when Sherlock is unavailable
 - Weave — read social graph for identity context before research (read-only; see `spec-ocas-interfaces.md` Cooperative Query Interfaces)
+- Elephas — emit Signal files for Chronicle promotion after each completed research request
 
 ## Journal outputs
 
