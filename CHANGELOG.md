@@ -1,3 +1,17 @@
+## [2.10.0] - 2026-04-12
+
+### Added
+- Handle extraction phase: after Tier 1 collection, Scout identifies high-confidence handles (@ prefixes, URL path usernames, labeled aliases)
+- Sherlock expansion: calls `sherlock(handle)` when Sherlock skill is installed; falls back to targeted `sift.search("site:platform 'handle'")` queries when not
+- Tiered verification: top 3 Sherlock results verified immediately via sift.extract; 2-3 sampled; remainder surfaced on request
+- Identity gate (invariant 7): requires 2+ overlapping data points from seed to mark a profile `verified`; username match alone is `unverified_lead`
+- Recursive discovery capped at 2 total Sherlock passes (alias chain following)
+- Social Graph section in brief output: verified profiles with evidence, unverified leads listed separately
+- Near-match flag: profiles matching name but contradicting seed attributes are surfaced for user review rather than silently dropped
+
+### Removed
+- `python3` from `requires_binaries` (no Python scripts in Scout package)
+
 ## [2026-04-05] Hunter.io parallel OSINT integration
 
 ### Added

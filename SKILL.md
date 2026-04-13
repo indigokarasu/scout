@@ -12,7 +12,7 @@ description: >
 metadata:
   author: Indigo Karasu
   email: mx.indigo.karasu@gmail.com
-  version: "2.9.3"
+  version: "2.10.0"
   hermes:
     tags: [research, osint, people]
     category: signal
