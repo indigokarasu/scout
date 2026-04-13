@@ -45,6 +45,11 @@ Scout makes research provenance a first-class requirement. Every claim in a Scou
 
 ## Changelog
 
+### v2.10.0 — April 12, 2026
+- Sherlock integration: handle extraction, tiered verification, identity gate (2+ overlapping data points required), recursion capped at 2 passes
+- Social Graph section added to brief output; near-match flag surfaces contradicting profiles for review
+- Removed `python3` from `requires_binaries`
+
 ### v2.6.0 -- April 2, 2026
 - Added `user_relevance` field on all emitted Elephas signals (default `agent_only` for research, `user` when user-requested)
 - Structured entity observations in journal payloads (`entities_observed` with relevance tags)
