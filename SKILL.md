@@ -40,8 +40,8 @@ metadata:
       requires_binaries: [gh, tar]
     requires:
       credentials:
-        - name: "hunter_api_key"
-          description: "Hunter.io API key for professional email discovery and verification"
+        - name: \"searchx_api_key\"
+          description: \"Local SearchX (SearXNG) access key (if required by local instance)\"
           required: false
     cron:
       - name: "scout:update"
@@ -179,8 +179,7 @@ Read `references/scout_source_waterfall.md` for full tier logic.
 
 All configured sources fire in parallel. Results are merged and deduplicated. A source without a configured key is silently skipped.
 
-- **Web + platform search** — public web via Sift's shared search stack (Twitter/X, Reddit, LinkedIn, GitHub agent-reach). Always runs.
-- **Hunter.io** — professional email discovery, domain search, and author identification. Runs automatically when `HUNTER_API_KEY` is set. Three queries in parallel: `domain-search` (all emails at target company), `email-finder` (find email for name + domain), `author-finder` (identify article authors by URL). Free tier: 50 requests/month.
+- **Web + platform search** — public web via SearchX (local SearXNG instance), including Twitter/X, Reddit, LinkedIn, GitHub agent-reach. Always runs.
 - **Tier 2** — rate-limited sources, registries, extended datasets. Only if enabled and useful.
 - **Tier 3** — paid OSINT providers, background databases. Requires explicit permission grant.
 
@@ -193,10 +192,7 @@ Markdown brief with: Executive Summary, Identity Resolution Notes, Findings, Soc
 - List unverified leads separately with a note that they are available for further investigation on request
 - Omit this section entirely if no handles were found
 
-**Professional Contacts section** (included when Hunter returns results):
-- List each discovered email with: address, confidence score (Hunter-native 0–100), type (`personal` or `generic`), source count
-- Provenance tag: `hunter.io`
-- Do not include emails with confidence < 50 unless explicitly requested
+- **Professional Contacts section** (removed: no longer using Hunter.io)
 
 ## Inter-skill interfaces
 
@@ -309,13 +305,9 @@ On first invocation of any Scout command, run `scout.init`:
 5. Ensure journal payload fields (see interfaces specification) exists (create if missing)
 6. Register cron job `scout:update` if not already present (check the platform scheduling registry first)
 7. Log initialization as a DecisionRecord in `decisions.jsonl`
-8. **Hunter.io setup** (run once; skip if `HUNTER_API_KEY` already set in environment):
-   - Check environment: `echo $HUNTER_API_KEY`
-   - If empty: open `https://hunter.io/users/sign_up` in browser
-   - Guide free account creation (no credit card required)
-   - After signup, navigate to `https://hunter.io/api-keys`
-   - Copy API key and store: add `HUNTER_API_KEY=<key>` to platform environment config
-   - Free tier provides 50 requests/month (sufficient for OSINT work)
+8. **SearchX Setup** (run once):
+   - Ensure the `web_search` skill is initialized by running `web_search_init()` via `execute_code`.
+   - This sets up the local SearXNG container and nginx proxy.
 
 ## Background tasks
 
