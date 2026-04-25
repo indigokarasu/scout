@@ -18,10 +18,10 @@ metadata:
     category: signal
     cron:
       - name: "scout:update"
-        schedule: "0 0 * * *"
+        schedule: "5 7 * * *"
         command: "scout.update"
       - name: "scout:research"
-        schedule: "0 9 * * 1"
+        schedule: "0 16 * * 1"
         command: "scout.research"
   openclaw:
     skill_type: system
@@ -45,10 +45,10 @@ metadata:
           required: false
     cron:
       - name: "scout:update"
-        schedule: "0 0 * * *"
+        schedule: "5 7 * * *"
         command: "scout.update"
       - name: "scout:research"
-        schedule: "0 9 * * 1"
+        schedule: "0 16 * * 1"
         command: "scout.research"
 ---
 
