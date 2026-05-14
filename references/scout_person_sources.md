@@ -2,7 +2,8 @@
 
 Curated list of person-specific OSINT tools and APIs, organized by capability.
 Updated: 2026-05-13. Sources reviewed from jivoi/awesome-osint, laramies/theHarvester,
-apurvsinghgautam/robin, cipher387/API-s-for-OSINT, and soxoj/awesome-osint-mcp-servers.
+apurvsinghgautam/robin, cipher387/API-s-for-OSINT, soxoj/awesome-osint-mcp-servers,
+and christinminor459/OnionClaw.
 
 ## Selection criteria
 
@@ -141,15 +142,30 @@ Find compromised credentials and leaked personal data.
 
 ## 7. Dark Web (Person-Specific)
 
+Search for a person's data on dark web markets, leak boards, paste sites, and forums.
+
 | Tool | Type | Free | Notes |
 |------|------|------|-------|
-| **Robin** | AI dark web search | Yes (needs Tor + LLM) | Searches dark web engines via Tor, uses LLM to filter. |
-| **Ahmia** | Web (ahmia.fi) | .onion search | Yes | Clearnet gateway to Tor search. |
+| **OnionClaw** | Tor dark web search + fetch + pipeline | Yes (needs Tor) | 12 dark web search engines, .onion fetching, circuit rotation, Robin-based LLM pipeline. Most complete dark web OSINT toolkit available. |
+| **Robin** | AI dark web search | Yes (needs Tor + LLM) | Searches dark web engines via Tor, uses LLM to filter. Overlaps with OnionClaw; use Robin when you already have it configured, OnionClaw when starting fresh. |
+| **Ahmia** | Web (ahmia.fi) | .onion search | Yes | Clearnet gateway to Tor search. Accessible via SearXNG if `.onion` indexing is enabled. |
+
+**OnionClaw details:**
+- 12 verified-live dark web search engines: Ahmia, OnionLand, Amnesia, Torland, Excavator, Onionway, Tor66, OSS, Torgol, TheDeepSearches, DuckDuckGo-Tor, Ahmia-clearnet
+- `search.py` — multi-engine search with dedup
+- `fetch.py` — fetch any .onion page through Tor
+- `renew.py` — rotate Tor circuit (new identity)
+- `pipeline.py` — full Robin pipeline: refine → search → filter → scrape → LLM synthesis
+- Requires: Tor running (SOCKS 9050), Python 3.10+, `requests[socks] beautifulsoup4 python-dotenv stem`
+- Install: `git clone https://github.com/JacobJandon/OnionClaw` then `pip install -r requirements.txt`
+- LLM key optional — search and fetch work without one
 
 **Scout workflow integration:**
-- Robin is a dynamic-discovery candidate (requires Tor + LLM API key).
-- Ahmia is accessible via SearXNG if `.onion` indexing is enabled.
-- Dark web search is Tier 2+ (specialized, not always necessary).
+- OnionClaw is the **preferred dark web tool** (replaces Robin as first-choice).
+- Dark web search is Tier 2+ (specialized, requires Tor, not always necessary).
+- Run when: research goal involves credential leaks, breach data, dark web forum presence, or ransomware victim listings.
+- `scout.sources.discover --query "dark web credential leak"` surfaces OnionClaw.
+- Person-relevant queries: `"john.doe@company.com" site:onion`, `"John Doe" leak`, `"CompanyName" breach dump`.
 
 ---
 
@@ -214,4 +230,5 @@ For a typical person research request, run in this order:
 9. **OpenSanctions** (sanctions) — always
 10. **FaceCheck.ID** (face search) — if photo available
 11. **Social Analyzer** (broad username) — Tier 2 escalation
-12. **Robin** (dark web) — Tier 2+ if Tor available
+12. **OnionClaw** (dark web) — Tier 2+ if Tor available, when leaks/breach data relevant
+13. **Robin** (dark web) — alternative to OnionClaw if already configured

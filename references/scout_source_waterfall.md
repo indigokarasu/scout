@@ -81,7 +81,8 @@ Escalation criteria: Tier 1 produced fewer than 3 findings, or key identity ques
 - **Numverify** — international phone validation
 - **FaceCheck.ID / Socialcatfish** — face search (when photo available)
 - **FamilyTreeNow / VoterRecords** — US public records
-- **Robin** — dark web OSINT (requires Tor + LLM)
+- **OnionClaw** — Tor dark web search (12 engines, .onion fetch, circuit rotation, Robin pipeline). Preferred dark web tool. Requires Tor.
+- **Robin** — alternative dark web OSINT (requires Tor + LLM)
 - **MCP-discovered servers** — dynamically discovered OSINT MCP servers matching research needs (see `scout_mcp_discovery.md`)
 
 ## Tier 3 — Paid Sources (Permission-Gated)

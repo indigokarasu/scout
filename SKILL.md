@@ -227,6 +227,7 @@ Markdown brief with: Executive Summary, Identity Resolution Notes, Findings, Soc
 - Google account data (via Ghunt): Google Maps reviews, Photos, YouTube channel if found
 - Phone metadata (via PhoneInfoga): carrier, location, line type
 - Email risk score (via EmailRep): risk level and associated profiles
+- Dark web exposure (via OnionClaw): any .onion results for the person's name, email, or handles — list engine, URL, and snippet. Omit if no dark web search was run or no results found.
 - Omit this section entirely if no email/phone data was available or tools were not run
 
 - **Professional Contacts section** (removed: no longer using Hunter.io)
@@ -285,6 +286,15 @@ Default config.json:
     "phoneinfoga": true,
     "emailrep": true,
     "opensanctions": true
+  },
+  "dark_web_tools": {
+    "onionclaw": {
+      "enabled": false,
+      "path": "~/.hermes/tools/onionclaw",
+      "requires_tor": true,
+      "tor_socks_host": "127.0.0.1",
+      "tor_socks_port": 9050
+    }
   },
   "mcp_discovery": {
     "enabled": true,
@@ -373,6 +383,13 @@ On first invocation of any Scout command, run `scout.init`:
    - Verify person-specific tools are installed: `theHarvester`, `maigret`, `holehe`, `h8mail`, `ghunt`, `phoneinfoga`
    - For each missing tool: attempt `pip install <tool>` and log result
    - Log tool availability in `decisions.jsonl`
+10. **Dark web tools check** (run once):
+    - Check if OnionClaw is installed: look for `~/.hermes/tools/onionclaw/search.py`
+    - Check if Tor is available: `which tor` and test SOCKS proxy on 127.0.0.1:9050
+    - If OnionClaw not found: log as optional (not blocking)
+    - If Tor not available: log as optional (not blocking)
+    - Update `config.json` `dark_web_tools.onionclaw.enabled` based on availability
+    - Log availability in `decisions.jsonl`
 
 ## Background tasks
 
@@ -407,6 +424,17 @@ On first invocation of any Scout command, run `scout.init`:
    ```
 6. On failure → retry once. If second attempt fails, report the error and stop.
 7. Output exactly: `I updated Scout from version {old} to {new}`
+
+## External Catalog Review
+
+Scout's person-specific tool list is periodically reviewed and updated from external catalogs. See `references/scout_person_sources.md` for the full list and `references/scout_mcp_discovery.md` for the dynamic discovery mechanism.
+
+**Catalogs monitored:**
+- https://github.com/soxoj/awesome-osint-mcp-servers (weekly)
+- https://github.com/jivoi/awesome-osint (monthly)
+- https://github.com/cipher387/API-s-for-OSINT (monthly)
+
+**Review trigger:** The `scout:sources-refresh` cron runs weekly. When new person-specific tools are found, they are classified by tier and added to `scout_person_sources.md`. Major additions are version-bumped and PR'd.
 
 ## Support file map
 

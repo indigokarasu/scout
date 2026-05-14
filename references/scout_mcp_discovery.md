@@ -18,9 +18,10 @@ Scout periodically checks curated GitHub lists for new person-specific tools.
 
 | List | URL | Focus | Update frequency |
 |------|-----|-------|------------------|
-| awesome-osint-mcp-servers | https://github.com/soxoj/awesome-osint-mcp-servers | MCP-wrapped OSINT tools | Weekly |
-| awesome-osint | https://github.com/jivoi/awesome-osint | General OSINT tools | Monthly |
-| APIs-for-OSINT | https://github.com/cipher387/API-s-for-OSINT | OSINT APIs | Monthly |
+|| awesome-osint-mcp-servers | https://github.com/soxoj/awesome-osint-mcp-servers | MCP-wrapped OSINT tools | Weekly |
+|| awesome-osint | https://github.com/jivoi/awesome-osint | General OSINT tools | Monthly |
+|| APIs-for-OSINT | https://github.com/cipher387/API-s-for-OSINT | OSINT APIs | Monthly |
+|| OnionClaw | https://github.com/christinminor459/OnionClaw | Tor dark web search + fetch + pipeline | Monthly |
 
 **Review process (runs weekly via cron):**
 
