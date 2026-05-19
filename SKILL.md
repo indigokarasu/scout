@@ -12,7 +12,7 @@ description: >
 metadata:
   author: Indigo Karasu
   email: mx.indigo.karasu@gmail.com
-  version: "2.10.0"
+  version: "3.0.0"
   hermes:
     tags: [research, osint, people]
     category: signal
@@ -23,6 +23,9 @@ metadata:
       - name: "scout:research"
         schedule: "0 16 * * 1"
         command: "scout.research"
+      - name: "scout:sources-refresh"
+        schedule: "0 6 * * 0"
+        command: "scout.sources.refresh"
   openclaw:
     skill_type: system
     visibility: public
@@ -50,11 +53,16 @@ metadata:
       - name: "scout:research"
         schedule: "0 16 * * 1"
         command: "scout.research"
+      - name: "scout:sources-refresh"
+        schedule: "0 6 * * 0"
+        command: "scout.sources.refresh"
 ---
 
 # Scout
 
 Scout conducts lawful OSINT research on people, companies, and organizations, assembling provenance-backed briefs where every claim carries a source reference, retrieval timestamp, and direct quote. It works through a tiered source waterfall — public web first, then rate-limited registries, then paid databases only with explicit permission — collecting no more than the stated research goal requires.
+
+Scout integrates curated person-specific OSINT tools (theHarvester, Maigret, Holehe, h8mail, PhoneInfoga, and others) and dynamically discovers new MCP-wrapped OSINT servers at runtime.
 
 ## When to use
 
@@ -86,7 +94,7 @@ Scout works with these types from `spec-ocas-ontology.md`:
 - **Entity/AI** — AI agents or organizations when relevant to research.
 - **Thing/DigitalArtifact** — public documents, profiles, and digital records found during research.
 
-Scout emits Signals to Elephas after each completed research request, for each extracted entity with confidence ≥ med. Signal `payload.type` is `"Person"` or `"AI"`. `source_journal_type` is `"Research"`. Every emitted Signal must include a `user_relevance` field.
+Scout emits Signals to Elephas after each completed research request, for each extracted entity with confidence >= med. Signal `payload.type` is `"Person"` or `"AI"`. `source_journal_type` is `"Research"`. Every emitted Signal must include a `user_relevance` field.
 
 ### user_relevance field
 
@@ -128,6 +136,9 @@ Signal example:
 - `scout.status` — return current research state
 - `scout.journal` — write journal for the current run; called at end of every run
 - `scout.update` — pull latest from GitHub source; preserves journals and data
+- `scout.sources.discover` — discover new MCP servers relevant to current research
+- `scout.sources.refresh` — refresh curated source lists from GitHub
+- `scout.sources.status` — show state of dynamic source discovery
 
 ## Invariants
 
@@ -140,10 +151,11 @@ Signal example:
 7. Identity gate — a profile found via handle expansion is `verified` only when 2+ data points from the seed overlap (e.g., name + location, name + bio keywords). A username match alone is `unverified_lead`; exclude unverified leads from final synthesis
 8. Tiered verification — Sherlock results processed in tiers: top 3 verified immediately, 2-3 sampled, remainder only on explicit user request
 9. Recursion cap — recursive handle discovery (a verified profile reveals a new handle) is allowed for one additional pass; hard cap at 2 Sherlock passes total per research request
+10. Person-first tooling — when researching a person, always run theHarvester and OpenSanctions. Run person-specific tools (Holehe, h8mail, PhoneInfoga, Ghunt) when the relevant input data (email, phone, Gmail) is available.
 
 ## Input contract
 
-ResearchRequest requires: request_id, as_of, subject (type, name, aliases, known_locations, known_handles), goal, constraints (time_budget_minutes, minimize_pii).
+ResearchRequest requires: request_id, as_of, subject (type, name, aliases, known_locations, known_handles, known_emails, known_phones), goal, constraints (time_budget_minutes, minimize_pii).
 
 Read `references/scout_schemas.md` for exact schema.
 
@@ -151,25 +163,41 @@ Read `references/scout_schemas.md` for exact schema.
 
 1. Normalize request and subject identity inputs
 2. Resolve likely identity matches conservatively
-3. Run Tier 1 public-source collection (via Sift shared search stack)
-4. **Extract high-confidence handles** — from Tier 1 results, identify: any unique string preceded by `@`, usernames in URL paths (e.g., `github.com/username`), and strings explicitly labeled as social aliases. Deduplicate handles before proceeding.
-5. **Sherlock expansion** — if one or more handles found:
-   - If `sherlock` skill is installed: call `sherlock(handle)` for each unique handle
-   - If Sherlock is not installed: fall back to targeted `sift.search("site:<platform> '<handle>'")` across the top 5 platforms (GitHub, LinkedIn, X, Instagram, Reddit); limit to avoid rate exhaustion
+3. **Run Tier 1 person-specific tools** (parallel):
+   - **theHarvester** — always run on person research (gathers names, emails, subdomains from 40+ sources)
+   - **OpenSanctions** — always run (sanctions/PEP screening)
+4. Run Tier 1 public-source collection (via Sift shared search stack) — in parallel with step 3
+5. **Extract high-confidence handles** — from Tier 1 results, identify: any unique string preceded by `@`, usernames in URL paths (e.g., `github.com/username`), and strings explicitly labeled as social aliases. Deduplicate handles before proceeding.
+6. **Handle expansion** — if one or more handles found:
+   - **Sherlock** — call `sherlock(handle)` for each unique handle
+   - If Sherlock returns < 3 verified profiles: run **Maigret** as second pass
    - Filter results to high-value tiers — Dev: GitHub, StackOverflow; Professional: LinkedIn, Medium; Social: X, Instagram, Reddit
    - **Tiered verification** (invariant 8): call `sift.extract(url)` on the top 3 results immediately; sample 2-3 others; surface remaining URLs in the brief as "unverified leads — available on request"
    - **Identity gate** (invariant 7): require 2+ overlapping data points from seed (name + location, name + bio keywords, etc.) to mark a profile `verified`; label all others `unverified_lead` and exclude from synthesis
-   - **Recursive discovery** (invariant 9): if a `verified` profile reveals a new handle not in the original seed, run one additional Sherlock/Sift pass on that handle; stop after 2 total passes
-6. Record provenance for every retained claim
-7. Compile preliminary findings with confidence levels
-8. Escalate to Tier 2 only if enabled and useful
-9. Escalate to Tier 3 only after explicit permission grant is recorded
-10. Generate brief with findings, uncertainty, and source log
-    - If Sherlock/handle expansion produced results: include a **Social Graph** section (see Output requirements)
+   - **Recursive discovery** (invariant 9): if a `verified` profile reveals a new handle not in the original seed, run one additional Sherlock/Maigret pass on that handle; stop after 2 total passes
+7. **Run email-specific tools** (parallel, if email known):
+   - **Holehe** — discover which sites the email is registered on
+   - **h8mail** — search 20+ breach databases locally
+   - **EmailRep** — email risk/reputation scoring
+   - **Ghunt** — if email is Gmail (reveals Google Maps reviews, Photos, YouTube channel)
+8. **Run phone-specific tools** (if phone known):
+   - **PhoneInfoga** — carrier, location, line type
+9. **Dynamic MCP discovery** (if Tier 1 results are thin or specific capabilities needed):
+   - Run `scout.sources.discover` with query matching unresolved research questions
+   - Connect to discovered MCP servers via `native-mcp` skill
+   - Use MCP tools for the current research step
+   - Record MCP server name and endpoint in source log
+10. Record provenance for every retained claim
+11. Compile preliminary findings with confidence levels
+12. Escalate to Tier 2 only if enabled and useful
+13. Escalate to Tier 3 only after explicit permission grant is recorded
+14. Generate brief with findings, uncertainty, and source log
+    - Include a **Social Graph** section if handle expansion ran (see Output requirements)
+    - Include a **Digital Footprint** section if email/phone tools ran (see Output requirements)
     - Near-match flag: if a profile matches the name but contradicts a known seed attribute (e.g., different city), surface it explicitly rather than discarding: *"Found a [Platform] profile with a matching name but listed in [Location] rather than [expected]. Flag as possible alt-account?"*
-11. Store request, findings, sources, and decisions locally
-12. Emit Signal files for confirmed entities and relationships to the `signal` payload field in the journal entry. Use Signal schema from `spec-ocas-shared-schemas.md`. One file per entity or relationship with sufficient confidence. Every Signal must include `user_relevance` (see Ontology types section). Set `"user"` if the run was user-initiated or the entity connects to a `user_relevance: "user"` Chronicle entry; otherwise `"agent_only"`. When social graph data is present, include `social_graph` in the Signal payload (handles array and verified profiles list with platform, url, status, discovery_method, verification_evidence).
-13. Write journal via `scout.journal`
+15. Store request, findings, sources, and decisions locally
+16. Emit Signal files for confirmed entities and relationships to the `signal` payload field in the journal entry. Use Signal schema from `spec-ocas-shared-schemas.md`. One file per entity or relationship with sufficient confidence. Every Signal must include `user_relevance` (see Ontology types section). Set `"user"` if the run was user-initiated or the entity connects to a `user_relevance: "user"` Chronicle entry; otherwise `"agent_only"`. When social graph data is present, include `social_graph` in the Signal payload (handles array and verified profiles list with platform, url, status, discovery_method, verification_evidence).
+17. Write journal via `scout.journal`
 
 When `minimize_pii=true`, suppress unnecessary sensitive details in the final brief.
 
@@ -179,18 +207,28 @@ Read `references/scout_source_waterfall.md` for full tier logic.
 
 All configured sources fire in parallel. Results are merged and deduplicated. A source without a configured key is silently skipped.
 
+- **Tier 1 — Person-specific tools** — theHarvester, OpenSanctions, Sherlock, Maigret, Holehe, h8mail, EmailRep, Ghunt, PhoneInfoga. Run automatically when relevant input data is available. See `references/scout_person_sources.md` for the full tool list and execution order.
 - **Web + platform search** — public web via SearchX (local SearXNG instance), including Twitter/X, Reddit, LinkedIn, GitHub agent-reach. Always runs.
-- **Tier 2** — rate-limited sources, registries, extended datasets. Only if enabled and useful.
+- **Tier 2** — rate-limited sources, registries, extended datasets, MCP-discovered servers. Only if enabled and useful.
 - **Tier 3** — paid OSINT providers, background databases. Requires explicit permission grant.
 
 ## Output requirements
 
-Markdown brief with: Executive Summary, Identity Resolution Notes, Findings, Social Graph (if handle expansion ran), Professional Contacts (if Hunter results available), Risk and Uncertainty, Source Log. Every finding carries source-backed provenance.
+Markdown brief with: Executive Summary, Identity Resolution Notes, Findings, Social Graph (if handle expansion ran), Digital Footprint (if email/phone tools ran), Risk and Uncertainty, Source Log. Every finding carries source-backed provenance.
 
-**Social Graph section** (included when handle expansion or Sherlock ran):
-- List verified profiles: platform, URL, discovery method (sherlock / sift-dork), verification evidence (which two data points matched)
+**Social Graph section** (included when handle expansion ran):
+- List verified profiles: platform, URL, discovery method (sherlock / maigret / sift-dork), verification evidence (which two data points matched)
 - List unverified leads separately with a note that they are available for further investigation on request
 - Omit this section entirely if no handles were found
+
+**Digital Footprint section** (included when email/phone tools ran):
+- Email accounts discovered (via Holehe): list platforms where the email is registered
+- Breach exposure (via h8mail/HIBP): list breaches the email appears in, with breach date and data classes
+- Google account data (via Ghunt): Google Maps reviews, Photos, YouTube channel if found
+- Phone metadata (via PhoneInfoga): carrier, location, line type
+- Email risk score (via EmailRep): risk level and associated profiles
+- Dark web exposure (via OnionClaw): any .onion results for the person's name, email, or handles — list engine, URL, and snippet. Omit if no dark web search was run or no results found.
+- Omit this section entirely if no email/phone data was available or tools were not run
 
 - **Professional Contacts section** (removed: no longer using Hunter.io)
 
@@ -213,18 +251,20 @@ See `spec-ocas-interfaces.md` for signal format.
   decisions.jsonl
   briefs/
   reports/
+  mcp_discovery_cache.json
+  source_list_hashes.json
+  mcp_servers.json
 
 {agent_root}/commons/journals/ocas-scout/
   YYYY-MM-DD/
     {run_id}.json
 ```
 
-
 Default config.json:
 ```json
 {
   "skill_id": "ocas-scout",
-  "skill_version": "2.3.0",
+  "skill_version": "3.0.0",
   "config_version": "1",
   "created_at": "",
   "updated_at": "",
@@ -236,6 +276,31 @@ Default config.json:
   },
   "brief": {
     "format": "markdown"
+  },
+  "person_tools": {
+    "theHarvester": true,
+    "maigret": true,
+    "holehe": true,
+    "h8mail": true,
+    "ghunt": true,
+    "phoneinfoga": true,
+    "emailrep": true,
+    "opensanctions": true
+  },
+  "dark_web_tools": {
+    "onionclaw": {
+      "enabled": false,
+      "path": "~/.hermes/tools/onionclaw",
+      "requires_tor": true,
+      "tor_socks_host": "127.0.0.1",
+      "tor_socks_port": 9050
+    }
+  },
+  "mcp_discovery": {
+    "enabled": true,
+    "registry_url": "https://nothumansearch.ai",
+    "cache_ttl_hours": 24,
+    "rate_limit_per_minute": 10
   },
   "retention": {
     "days": 90,
@@ -265,14 +330,20 @@ skill_okrs:
     direction: maximize
     target: 6
     evaluation_window: 30_runs
+  - name: person_tool_coverage
+    metric: fraction of applicable person-specific tools actually invoked per run
+    direction: maximize
+    target: 0.80
+    evaluation_window: 30_runs
 ```
 
 ## Optional skill cooperation
 
-- **Sherlock** — username-to-platform expansion. Check at runtime via the platform skill registry. If installed, called during handle expansion phase (step 5). If absent, Scout falls back to targeted `sift.search("site:<platform> '<handle>'")` queries across top-5 platforms.
-- Sift — web search during Tier 1 collection and Sift-dork fallback when Sherlock is unavailable
-- Weave — read social graph for identity context before research (read-only; see `spec-ocas-interfaces.md` Cooperative Query Interfaces)
-- Elephas — emit Signal files for Chronicle promotion after each completed research request
+- **Sherlock** — username-to-platform expansion. Check at runtime via the platform skill registry. If installed, called during handle expansion phase (step 6). If absent, Scout falls back to targeted `sift.search("site:<platform> '<handle>'")` queries across top-5 platforms.
+- **Sift** — web search during Tier 1 collection and Sift-dork fallback when Sherlock is unavailable
+- **Weave** — read social graph for identity context before research (read-only; see `spec-ocas-interfaces.md` Cooperative Query Interfaces)
+- **Elephas** — emit Signal files for Chronicle promotion after each completed research request
+- **native-mcp / mcporter** — connect to dynamically discovered MCP-wrapped OSINT servers at runtime
 
 ## Journal outputs
 
@@ -308,6 +379,17 @@ On first invocation of any Scout command, run `scout.init`:
 8. **SearchX Setup** (run once):
    - Ensure the `web_search` skill is initialized by running `web_search_init()` via `execute_code`.
    - This sets up the local SearXNG container and nginx proxy.
+9. **Person tools check** (run once):
+   - Verify person-specific tools are installed: `theHarvester`, `maigret`, `holehe`, `h8mail`, `ghunt`, `phoneinfoga`
+   - For each missing tool: attempt `pip install <tool>` and log result
+   - Log tool availability in `decisions.jsonl`
+10. **Dark web tools check** (run once):
+    - Check if OnionClaw is installed: look for `~/.hermes/tools/onionclaw/search.py`
+    - Check if Tor is available: `which tor` and test SOCKS proxy on 127.0.0.1:9050
+    - If OnionClaw not found: log as optional (not blocking)
+    - If Tor not available: log as optional (not blocking)
+    - Update `config.json` `dark_web_tools.onionclaw.enabled` based on availability
+    - Log availability in `decisions.jsonl`
 
 ## Background tasks
 
@@ -315,12 +397,13 @@ On first invocation of any Scout command, run `scout.init`:
 |---|---|---|---|
 | `scout:update` | cron | `0 0 * * *` (midnight daily) | `scout.update` |
 | `scout:research` | cron | `0 9 * * 1` (Monday 9am) | `scout.research` |
+| `scout:sources-refresh` | cron | `0 6 * * 0` (Sunday 6am) | `scout.sources.refresh` |
 
 ```
 # Task declared in SKILL.md frontmatter metadata.{platform}.cron
 # Task declared in SKILL.md frontmatter metadata.{platform}.cron
+# Task declared in SKILL.md frontmatter metadata.{platform}.cron
 ```
-
 
 ## Self-update
 
@@ -342,6 +425,17 @@ On first invocation of any Scout command, run `scout.init`:
 6. On failure → retry once. If second attempt fails, report the error and stop.
 7. Output exactly: `I updated Scout from version {old} to {new}`
 
+## External Catalog Review
+
+Scout's person-specific tool list is periodically reviewed and updated from external catalogs. See `references/scout_person_sources.md` for the full list and `references/scout_mcp_discovery.md` for the dynamic discovery mechanism.
+
+**Catalogs monitored:**
+- https://github.com/soxoj/awesome-osint-mcp-servers (weekly)
+- https://github.com/jivoi/awesome-osint (monthly)
+- https://github.com/cipher387/API-s-for-OSINT (monthly)
+
+**Review trigger:** The `scout:sources-refresh` cron runs weekly. When new person-specific tools are found, they are classified by tier and added to `scout_person_sources.md`. Major additions are version-bumped and PR'd.
+
 ## Support file map
 
 | File | When to read |
@@ -349,6 +443,8 @@ On first invocation of any Scout command, run `scout.init`:
 | `references/scout_schemas.md` | Before creating requests, findings, or briefs |
 | `references/scout_source_waterfall.md` | Before tier selection or escalation decisions |
 | `references/scout_brief_template.md` | Before rendering briefs |
+| `references/scout_person_sources.md` | At start of every person research run; before tool selection |
+| `references/scout_mcp_discovery.md` | Before `scout.sources.discover`; before Tier 2 escalation |
 | `references/journal.md` | Before scout.journal; at end of every run |
 
 ## Update command
