@@ -10,10 +10,28 @@ description: 'Scout: structured OSINT research on people, companies, and organiz
 
 '
 license: MIT
+source: https://github.com/indigokarasu/scout
+includes:
+  - references/**
+  - scripts/**
+
 metadata:
   author: Indigo Karasu
   version: 3.0.0
 ---
+## When to Use
+
+- OSINT research on people, companies, or topics
+- Structured investigation with source tracking
+- Due diligence and background research
+- Competitive intelligence gathering
+- When Sift needs deeper targeted research
+## When NOT to Use
+
+- General topic research (use Sift)
+- Image processing (use Look)
+- Knowledge graph writes (use Elephas)
+- Social graph management (use Weave)
 
 # Scout
 
@@ -29,13 +47,21 @@ Scout integrates curated person-specific OSINT tools (theHarvester, Maigret, Hol
 - Compile what is publicly knowable about a subject
 - Expand a quick lookup into an auditable brief
 
-## When not to use
+## When NOT to use
 
 - Illegal intrusion into private systems
 - Credential theft or bypassing access controls
 - Covert surveillance
 - Speculative doxxing
 - Topic research without a person/org focus — use Sift
+
+## What this skill does not do
+
+- General topic research (Sift)
+- Image processing (Look)
+- Knowledge graph writes (Elephas)
+- Social graph management (Weave)
+- Communications (Dispatch)
 
 ## Responsibility boundary
 
@@ -214,7 +240,9 @@ On first invocation, run `scout.init`: create data dirs + default config, create
 
 ## Self-update
 
-`scout.update` pulls latest from GitHub source URL in frontmatter. Silent unless version changed. Compares local vs remote version via GitHub API, downloads tarball, retries once on failure. Outputs: `I updated Scout from version {old} to {new}`.
+`scout.update` pulls the latest package from the `source:` URL in this file's frontmatter. Runs silently — no output unless the version changed or an error occurred.
+
+Read `references/self_update.md` for the full self-update procedure.
 
 ## External Catalog Review
 
@@ -228,7 +256,7 @@ Monitors: [awesome-osint-mcp-servers](https://github.com/soxoj/awesome-osint-mcp
 - **Identity gate requires 2+ data points** — A username match alone produces only `unverified_lead` status. Profiles are `verified` only when 2+ seed data points overlap (name + location, etc.).
 - **minimize_pii suppresses home addresses and personal details** — When the user sets `minimize_pii=true`, the final brief suppresses unnecessary sensitive details even if they were found during research. Re-run without the flag to see full data.
 
-## Support file map
+## Support File Map
 
 | File | When to read |
 |---|---|
@@ -239,3 +267,14 @@ Monitors: [awesome-osint-mcp-servers](https://github.com/soxoj/awesome-osint-mcp
 | `references/scout_person_sources.md` | At start of every person research run |
 | `references/scout_mcp_discovery.md` | Before `scout.sources.discover`; before Tier 2 escalation |
 | `references/journal.md` | Before scout.journal; at end of every run |
+| `references/self_update.md` | Before running `scout.update`; when debugging self-update failures |
+
+## Update command
+
+This skill self-updates every 24 hours via:
+
+```bash
+scout.update
+```
+
+This pulls the latest version from GitHub and restarts the skill's background tasks if applicable.
