@@ -1,7 +1,7 @@
 # Scout Person-Specific OSINT Sources
 
 Curated list of person-specific OSINT tools and APIs, organized by capability.
-Updated: 2026-05-13. Sources reviewed from jivoi/awesome-osint, laramies/theHarvester,
+Updated: 2026-05-31. Sources reviewed from jivoi/awesome-osint, laramies/theHarvester,
 apurvsinghgautam/robin, cipher387/API-s-for-OSINT, soxoj/awesome-osint-mcp-servers,
 and christinminor459/OnionClaw.
 
@@ -28,6 +28,11 @@ Find accounts belonging to a person across platforms.
 | **Blackbird** | `pip install blackbird` | 600+ sites | ~45s | Includes AI-based profile matching to reduce false positives. |
 | **Social Analyzer** | `pip install social-analyzer` | 1000+ sites | ~120s | Slowest but broadest. Use for high-value targets when other tools return thin results. |
 | **Trace** | Web (trace.manus.space) | 600+ sites | ~30s | Also handles email, phone, name. Includes breach detection and AI risk scoring. |
+| **Antisocial** | `pip install antisocial` | 500+ sites | ~45s | Three-tier verification (API → browser → HTTP). Reduces false positives to ~5%. |
+| **SherlockEye** | Web (sherlockeye.io) | OSINT by username | ~30s | Public data linked to usernames across web sources. |
+| **Digital Footprint Check** | Web (digitalfootprintcheck.com) | 100+ sites | ~20s | Free username checker across hundreds of sites. |
+| **Seekr** | `pip install seekr` | Multi-source | ~60s | All-in-one OSINT toolkit with web UI. Username checking + note taking. |
+| **User Searcher** | Web (user-searcher.com) | 2000+ sites | ~60s | Free username search across 2000+ websites. |
 
 **Scout workflow integration:**
 - Step 5 (handle expansion) already runs Sherlock. Add Maigret as a second-pass
@@ -51,6 +56,17 @@ Discover accounts, breaches, and metadata linked to an email address.
 | **DeHashed** | API (dehashed.com) | Breach search | Freemium | Aggregated breach data. |
 | **Ghunt** | `pip install ghunt` | Google account | Yes | Investigates Google emails — finds Google Maps reviews, Photos, YouTube channel. |
 | **Gyrecon** | `pip install gyrecon` | GitHub email | Yes | Scans GitHub for exposed emails and names in commits. |
+| **Epieos Tools** | Web (tools.epieos.com) | Email OSINT | Yes | Collection of free OSINT tools for email investigations (Google, Skype, etc.). |
+| **MailAccess** | `pip install mailaccess` | Multi-platform + breach | Yes | Checks 800+ platforms, HIBP, infostealer logs. Cross-platform identity graph with confidence scoring. |
+| **LeakRadar** | API (leakradar.io) | Stealer log scan | Freemium | Scans compromised emails/domains in infostealer logs. Real-time alerts. |
+| **Minerva OSINT** | Web (minervaosint.com) | Email search | Yes | Aggregates data on a target email from 100+ websites. |
+| **IntelBase** | API (intelbase.is) | Email forensics | Freemium | Reverse email lookup + email data enrichment. |
+| **user-scanner** | `pip install user-scanner` | Email/site check | Yes | Scans a given email across popular sites, games, and retrieves registration info. |
+| **EVA** | API (eva.pingutil.com) | Email verification | Yes | Measures email deliverability and quality. |
+| **Mailboxlayer** | API (mailboxlayer.com) | Email verification | Freemium | 100 requests free, 5000/month — $14.49. Simple REST API. |
+| **EmailCrawlr** | API (emailcrawlr.com) | Domain email search | Freemium | 200 requests free. Find all emails associated with a domain. |
+| **Kickbox** | API (open.kickbox.com) | Email verification | Yes | Free email verification API. |
+| **Reacher** | API (reacher.email) | Real-time verification | Yes | Rust-based, 100% open-source email verification API. |
 
 **Scout workflow integration:**
 - When an email is known: run Holehe (account discovery) + h8mail (breach check) in parallel.
@@ -69,6 +85,9 @@ Identify the owner and metadata of a phone number.
 | **Numverify** | API (numverify.com) | Validation/lookup | 250 req/mo free | Global phone validation, 232 countries. |
 | **Twilio Lookup** | API (twilio.com) | Carrier/location | Free credits | Carrier, caller name, line type. ~$0.01/lookup. |
 | **Truecaller** | API (truecaller.com) | Identity | Freemium | Global reverse phone lookup. |
+| **Veriphone** | API (veriphone.io) | Validation/carrier | Yes | 1000 requests/month free. Phone validation and carrier lookup. |
+| **Infobel** | API (infobel.com) | Contact search | Freemium | 164M+ records across 73 countries. Phone + person + address lookup. |
+| **GetContact** | API (getcontact.com) | Phone identity | Paid | Find info about user by phone number. |
 
 **Scout workflow integration:**
 - PhoneInfoga is the default (free, no API key, pip-installable).
@@ -86,6 +105,7 @@ Link a face to online profiles and identities.
 | **FaceCheck.ID** | Face-to-profile | Freemium | Searches social media by face. |
 | **Socialcatfish** | Face + name search | Freemium | 200B+ records. Face, name, email, phone, username. |
 | **Surfface** | Face-to-social | Freemium | Links faces to social media profiles. |
+| **Social Links API** | Face + email + phone | Paid | Individual/company profiling, social media tracking, dark web monitoring. Face search API. |
 | **MRISA** | Reverse image | Yes (self-hosted) | Google reverse image search API. |
 | **PicImageSearch** | Reverse image aggregator | Yes (self-hosted) | Aggregates Google, Yandex, Bing, TinEye. |
 
@@ -110,6 +130,15 @@ Find people by name, address, or other attributes.
 | **Pipl** | API | Identity | Paid | Professional identity resolution. Tier 3. |
 | **Spokeo** | Web | People search | Paid | Tier 3. |
 | **BeenVerified** | Web | Background check | Paid | Tier 3. |
+| **Apollo.io** | Web/API | B2B contact finder | Freemium | Free B2B phone & email finder. 1200 credits/year free. |
+| **ContactOut** | API | Professional contact | Paid | Find emails & phone for 300M professionals. Tier 3. |
+| **Judyrecords** | Web | US court records | Yes | Nationwide search of 400M+ US court cases. |
+| **UniCourt** | Web | US court records | Freemium | Nationwide search of 100M+ US court cases. |
+| **VineLink** | Web | US inmate search | Yes | Inmate search linked to US correctional facilities. |
+| **California Justice Watch** | Web/API/MCP | CA judicial records | Yes | District attorneys, public defenders, judges, misconduct records. Free MCP server. |
+| **BuscaPaginasBlancas** | `pip install buscablancas` | Spanish white pages | Yes | OSINT tool for Spanish contact info extraction. |
+| **ITP Infotrack** | Web | People/vehicle/property | Freemium | US people, vehicle, property lookup. |
+| **ZabaSearch** | Web | People search | Yes | Free US people search (name, phone, address). |
 
 **Scout workflow integration:**
 - theHarvester is a Tier 1 default — run it on every person research request
@@ -132,6 +161,12 @@ Find compromised credentials and leaked personal data.
 | **LeakIX** | API (leakix.net) | Exposed data | Freemium | Exposed databases, leaks. |
 | **IntelX** | API (intelx.io) | Dark web + leaks | Freemium | Pastes, leaks, dark web. |
 | **InfoStealers** | Web (infostealers.info) | Infostealer logs | Yes | Darknet-exposed infostealer logs. |
+| **Leaker** | `pip install leaker` | Multi-breach CLI | Yes | Passive leak enumeration across 10 breach databases simultaneously. |
+| **OsintCat** | API (osintcat.net) | Email breach check | Yes | Fast breach lookup across multiple databases. Simple API. |
+| **StealSeek** | Web (stealseek.io) | Breach search | Yes | Search and analyze data breaches. |
+| **Venacus** | API (venacus.com) | Breach monitoring | Freemium | Search for data breaches and get notified of new compromises. |
+| **NOX** | GitHub (nox-project/nox-framework) | Deep breach analysis | Yes | Recursive async framework for deep breach analysis and identity pivoting. |
+| **CredenShow** | Web (credenshow.com) | Compromised credentials | Freemium | Identify compromised credentials before others do. |
 
 **Scout workflow integration:**
 - h8mail + HIBP run in parallel when email is known.
@@ -207,6 +242,10 @@ These are MCP servers that can be connected via the `native-mcp` skill or `mcpor
 | **CompanyScope MCP** | Stewyboy1990/companyscope-mcp | Company + person intelligence |
 | **OpenRegistry MCP** | sophymarine/openregistry | 27 corporate registries |
 | **Not Human Search** | nothumansearch.ai | MCP server discovery (8600+ servers) |
+| **Xquik** | Xquik-dev/x-twitter-scraper | X (Twitter) data extraction, 40+ REST API endpoints, real-time monitoring |
+| **Expose Team** | expose.team | AI-powered OSINT, credit-based ($8+/mo) |
+| **Checko MCP** | Nymaxxx/checko-mcp | Russian company/individual verification (EGRUL/EGRIP), paid |
+| **StockScope** | Stewyboy1990/companyscope-mcp | SEC EDGAR financial intelligence, free |
 
 **Scout workflow integration:**
 - See `scout_mcp_discovery.md` for the dynamic discovery mechanism.

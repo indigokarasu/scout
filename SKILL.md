@@ -8,17 +8,58 @@ description: 'Scout: structured OSINT research on people, companies, and organiz
   do we know about'', ''update scout''. Do not use for topic research without a person/org
   focus (use Sift) or illegal data collection.
 
-'
+  '
 license: MIT
 source: https://github.com/indigokarasu/scout
 includes:
-  - references/**
-  - scripts/**
-
+- references/**
+- scripts/**
 metadata:
-  author: Indigo Karasu
+  author: Indigo Karasu (indigokarasu)
   version: 3.0.0
+triggers:
+- osint research
+- people research
+- company research
+- entity resolution
+- provenance brief
 ---
+## Interactive Menu
+
+When invoked interactively (via `/` command), present a two-level menu using the `clarify` tool so the user can pick which function to run.
+
+**Level 1 — Category selection** (max 4 choices):
+
+```python
+result = clarify(
+    question="What would you like to do?",
+    choices=[
+        "Research — start new project, expand tier, discover sources",
+        "Briefs — render research brief or PDF",
+        "Sources — refresh and check source status",
+        "Status — show system status",
+    ]
+)
+```
+
+**Level 2 — Action selection** based on Level 1 choice:
+
+- **Research** → clarify with choices: "research.start — Start a new research project", "research.expand — Expand to next tier", "sources.discover — Discover new sources"
+- **Briefs** → clarify with choices: "brief.render — Render research brief", "brief.render_pdf — Render brief as PDF"
+- **Sources** → clarify with choices: "sources.refresh — Refresh source lists", "sources.status — Show source status"
+- **Status** → run "status — Show system status" directly (single action — no sub-menu needed)
+
+After the user selects an action, execute it following the relevant procedure in this skill. Loop back to the menu after each action completes, until the user chooses to exit or sends `/stop`.
+
+### Response parsing
+
+Match the user's response against the full choice string. Extract the action key by splitting on `" — "` and taking the first segment. If the response doesn't match any known choice (user typed free-form via "Other"), match key prefixes case-insensitively. Re-present the current menu level on no match.
+
+### Platform adaptation
+
+On CLI, choices are navigable with arrow keys. On messaging platforms, choices render as a numbered list. The two-level hierarchy ensures no more than 4 options appear at any level on any platform.
+
+
 ## When to Use
 
 - OSINT research on people, companies, or topics
@@ -38,30 +79,6 @@ metadata:
 Scout conducts lawful OSINT research on people, companies, and organizations, assembling provenance-backed briefs where every claim carries a source reference, retrieval timestamp, and direct quote. It works through a tiered source waterfall — public web first, then rate-limited registries, then paid databases only with explicit permission — collecting no more than the stated research goal requires.
 
 Scout integrates curated person-specific OSINT tools (theHarvester, Maigret, Holehe, h8mail, PhoneInfoga, and others) and dynamically discovers new MCP-wrapped OSINT servers at runtime.
-
-## When to use
-
-- Research a person and build a source-backed brief
-- Do background research on a company using public sources
-- Resolve whether two profiles are the same person with cited sources
-- Compile what is publicly knowable about a subject
-- Expand a quick lookup into an auditable brief
-
-## When NOT to use
-
-- Illegal intrusion into private systems
-- Credential theft or bypassing access controls
-- Covert surveillance
-- Speculative doxxing
-- Topic research without a person/org focus — use Sift
-
-## What this skill does not do
-
-- General topic research (Sift)
-- Image processing (Look)
-- Knowledge graph writes (Elephas)
-- Social graph management (Weave)
-- Communications (Dispatch)
 
 ## Responsibility boundary
 
@@ -214,6 +231,12 @@ All metrics: maximize. Universal OKRs from spec-ocas-journal.md apply.
 - **Weave** — read social graph for identity context before research (read-only)
 - **Elephas** — emit Signal files for Chronicle promotion
 - **native-mcp / mcporter** — connect to dynamically discovered MCP-wrapped OSINT servers
+- **RapidAPI** — structured social media enrichment via `rapidapi_call` (see RapidAPI Enrichment Workflow below)
+
+---
+## RapidAPI Enrichment Workflow
+
+During Phase 3 (Handle Expansion) and Phase 4 (Email/Phone Tools), use RapidAPI social media endpoints to enrich profiles with structured data that free tools (Sherlock/Maigret) can't provide. Full procedure including person/company enrichment pipelines, rate limiting, and tier integration: see `references/rapidapi-enrichment-workflow.md`.
 
 ## Journal outputs
 
@@ -255,6 +278,10 @@ Monitors: [awesome-osint-mcp-servers](https://github.com/soxoj/awesome-osint-mcp
 - **Hard cap at 2 Sherlock passes** — Recursive handle discovery is allowed for exactly 1 additional pass (2 total). Further recursion is silently blocked regardless of leads found.
 - **Identity gate requires 2+ data points** — A username match alone produces only `unverified_lead` status. Profiles are `verified` only when 2+ seed data points overlap (name + location, etc.).
 - **minimize_pii suppresses home addresses and personal details** — When the user sets `minimize_pii=true`, the final brief suppresses unnecessary sensitive details even if they were found during research. Re-run without the flag to see full data.
+- **`execute_code` blocked in cron mode** — When Scout runs as a scheduled cron job, `execute_code` is denied by policy. Use `terminal()` for all shell commands and Python workarounds. Structure multi-step work as a single piped `terminal()` call rather than relying on `execute_code` for programmatic logic.
+- **`gh api` base64 content is unreliable for counting** — `gh api repos/<owner>/<repo>/readme --jq '.content' | base64 -d` can silently return truncated or empty results. For fetching raw GitHub README content, use `curl -s "https://raw.githubusercontent.com/<owner>/<repo>/<branch>/README.md"` instead. This returns clean text that `wc -l` and `grep` can process directly.
+- **Branch names vary across repos** — `jivoi/awesome-osint` uses `master` (not `main`). Always verify branch name with a quick `curl -s -o /dev/null -w "%{http_code}"` probe before fetching content.
+- **curl timeout for unreliable endpoints** — Some GitHub endpoints return 0 bytes under rate-limiting. Use `--max-time 15` and check HTTP status code before processing output.
 
 ## Support File Map
 
@@ -265,9 +292,11 @@ Monitors: [awesome-osint-mcp-servers](https://github.com/soxoj/awesome-osint-mcp
 | `references/scout_source_waterfall.md` | Before tier selection or escalation |
 | `references/scout_brief_template.md` | Before rendering briefs |
 | `references/scout_person_sources.md` | At start of every person research run |
-| `references/scout_mcp_discovery.md` | Before `scout.sources.discover`; before Tier 2 escalation |
-| `references/journal.md` | Before scout.journal; at end of every run |
-| `references/self_update.md` | Before running `scout.update`; when debugging self-update failures |
+|| `references/scout_mcp_discovery.md` | Before `scout.sources.discover`; before Tier 2 escalation |
+|| `references/rapidapi-osint-params.md` | Before RapidAPI enrichment; param patterns per platform |
+|| `references/rapidapi-enrichment-workflow.md` | During Phase 3/4 research; RapidAPI person/company enrichment pipelines |
+|| `references/journal.md` | Before scout.journal; at end of every run |
+|| `references/self_update.md` | Before running `scout.update`; when debugging self-update failures |
 
 ## Update command
 

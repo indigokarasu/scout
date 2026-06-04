@@ -65,7 +65,18 @@ Benefits:
 - No additional latency (parallel execution)
 - Shared infrastructure — improvements to Sift's search benefit all skills
 
-## Tier 2 — Extended Sources (Config-Gated)
+### Tier 1.5 — RapidAPI Social Enrichment (Structured APIs)
+
+After Tier 1 free tools and platform search, but before Tier 2 expensive tools, use RapidAPI to get **structured profile data** from social media platforms. This is especially useful when:
+- A username/handle is already known from Tier 1 results
+- Email or phone is known and social profiles need enrichment
+- Company/organization LinkedIn data is needed
+
+RapidAPI runs **in parallel** with Tier 1 tools when enrichment data is available (known handles, emails, phones).
+
+**RapidAPI reference:** `~/.hermes/references/rapidapi/ocas-mapping.md`
+
+### Tier 2 — Extended Sources (Config-Gated)
 
 Sources: rate-limited APIs, business registries, extended public datasets, professional directories, MCP-discovered servers.
 
