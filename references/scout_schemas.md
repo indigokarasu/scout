@@ -108,3 +108,61 @@ Extends shared DecisionRecord. Scout-specific types: tier_escalation, identity_r
   "error": "string|null"
 }
 ```
+
+## PublicRecordFinding
+
+```json
+{
+  "finding_id": "string",
+  "source": "string — sec_edgar|usaspending|senate_ld|ofac_sdn|icij_offshore|nyc_acris|opencorporates|courtlistener|wayback|wikipedia|gdelt",
+  "record_type": "string — e.g. 10-K, contract, filing, sanction, deed, opinion, capture, article, news",
+  "record_date": "string — ISO 8601 date or null",
+  "entity_name": "string — normalized name as found in source",
+  "matched_name": "string — normalized name after entity resolution",
+  "match_tier": "string — exact|fuzzy|token_overlap",
+  "match_confidence": "string — high|med|low",
+  "claim": "string — the factual claim from this record",
+  "key_data": "object — source-specific key fields (amount, agency, jurisdiction, etc.)",
+  "source_ref": {
+    "url": "string",
+    "retrieved_at": "string — ISO 8601",
+    "quote": "string — supporting excerpt"
+  },
+  "csv_file": "string — path to source CSV",
+  "csv_row": "number — row number in source CSV"
+}
+```
+
+## CrossLink
+
+```json
+{
+  "link_id": "string",
+  "left_source": "string — source name (left)",
+  "right_source": "string — source name (right)",
+  "left_name": "string — original name (left)",
+  "right_name": "string — original name (right)",
+  "left_normalized": "string — normalized name (left)",
+  "right_normalized": "string — normalized name (right)",
+  "match_type": "string — exact|fuzzy|token_overlap",
+  "confidence": "string — high|med|low",
+  "left_row": "number — row in left CSV",
+  "right_row": "number — row in right CSV"
+}
+```
+
+## TimingAnalysis
+
+```json
+{
+  "analysis_id": "string",
+  "left_series": "string — source name for event series (e.g. lobbying filings)",
+  "right_series": "string — source name for award series (e.g. contracts)",
+  "permutations": "number",
+  "p_value": "number — one-tailed",
+  "observed_mean_distance": "number — mean days between events and nearest awards",
+  "null_hypothesis": "string — event timing is independent of award dates",
+  "significant": "boolean — p < 0.05",
+  "interpretation": "string — plain-language interpretation, NOT an accusation"
+}
+```

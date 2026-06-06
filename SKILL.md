@@ -16,7 +16,7 @@ includes:
 - scripts/**
 metadata:
   author: Indigo Karasu (indigokarasu)
-  version: 3.0.0
+  version: 4.0.0
 triggers:
 - osint research
 - people research
@@ -26,39 +26,7 @@ triggers:
 ---
 ## Interactive Menu
 
-When invoked interactively (via `/` command), present a two-level menu using the `clarify` tool so the user can pick which function to run.
-
-**Level 1 — Category selection** (max 4 choices):
-
-```python
-result = clarify(
-    question="What would you like to do?",
-    choices=[
-        "Research — start new project, expand tier, discover sources",
-        "Briefs — render research brief or PDF",
-        "Sources — refresh and check source status",
-        "Status — show system status",
-    ]
-)
-```
-
-**Level 2 — Action selection** based on Level 1 choice:
-
-- **Research** → clarify with choices: "research.start — Start a new research project", "research.expand — Expand to next tier", "sources.discover — Discover new sources"
-- **Briefs** → clarify with choices: "brief.render — Render research brief", "brief.render_pdf — Render brief as PDF"
-- **Sources** → clarify with choices: "sources.refresh — Refresh source lists", "sources.status — Show source status"
-- **Status** → run "status — Show system status" directly (single action — no sub-menu needed)
-
-After the user selects an action, execute it following the relevant procedure in this skill. Loop back to the menu after each action completes, until the user chooses to exit or sends `/stop`.
-
-### Response parsing
-
-Match the user's response against the full choice string. Extract the action key by splitting on `" — "` and taking the first segment. If the response doesn't match any known choice (user typed free-form via "Other"), match key prefixes case-insensitively. Re-present the current menu level on no match.
-
-### Platform adaptation
-
-On CLI, choices are navigable with arrow keys. On messaging platforms, choices render as a numbered list. The two-level hierarchy ensures no more than 4 options appear at any level on any platform.
-
+When invoked interactively (via `/` command), present a two-level menu. See `references/interactive-menu.md` for the menu structure and response parsing logic.
 
 ## When to Use
 
@@ -78,7 +46,7 @@ On CLI, choices are navigable with arrow keys. On messaging platforms, choices r
 
 Scout conducts lawful OSINT research on people, companies, and organizations, assembling provenance-backed briefs where every claim carries a source reference, retrieval timestamp, and direct quote. It works through a tiered source waterfall — public web first, then rate-limited registries, then paid databases only with explicit permission — collecting no more than the stated research goal requires.
 
-Scout integrates curated person-specific OSINT tools (theHarvester, Maigret, Holehe, h8mail, PhoneInfoga, and others) and dynamically discovers new MCP-wrapped OSINT servers at runtime.
+Scout integrates curated person-specific OSINT tools (theHarvester, Maigret, Holehe, h8mail, PhoneInfoga, and others), a public-records investigation framework (SEC EDGAR, USAspending, Senate lobbying, OFAC sanctions, ICIJ offshore leaks, NYC property records, OpenCorporates, CourtListener, Wayback Machine, Wikipedia/Wikidata, GDELT), and dynamically discovers new MCP-wrapped OSINT servers at runtime.
 
 ## Responsibility boundary
 
@@ -162,10 +130,13 @@ Full step-by-step workflow with tool commands, handle expansion logic, identity 
 2. **Tier 1 collection** — run person-specific tools (theHarvester, OpenSanctions) and public web search in parallel
 3. **Handle expansion** — extract handles, run Sherlock/Maigret, apply identity gate (inv 7), tiered verification (inv 8), recursion cap at 2 passes (inv 9)
 4. **Email/phone tools** — run Holehe, h8mail, EmailRep, Ghunt (if Gmail), PhoneInfoga as data is available
-5. **Dynamic MCP discovery** — if Tier 1 results are thin, discover and connect to MCP-wrapped OSINT servers
-6. **Compile** — record provenance, assign confidence, escalate to Tier 2/3 only as permitted
-7. **Brief** — render markdown brief (see Output requirements). Near-match profiles surfaced explicitly, not discarded.
-8. **Emit & journal** — store findings, emit Signal files per confirmed entity (with `user_relevance`), write journal via `scout.journal`
+5. **Public records investigation** — for company/org research or when person research reveals corporate ties, run public-records fetch scripts (SEC EDGAR, USAspending, Senate lobbying, OFAC sanctions, ICIJ offshore leaks, OpenCorporates, CourtListener, NYC ACRIS, Wayback Machine, Wikipedia/Wikidata, GDELT). See `references/scout_public_records.md` for source selection, execution order, and cross-reference keys.
+6. **Entity resolution across sources** — normalize names, run `entity_resolution.py` to cross-link entities between public-records CSVs and person-tool findings. Three match tiers: exact (high), fuzzy (medium), token_overlap (low).
+7. **Timing correlation (optional)** — run `timing_analysis.py` to test whether event time series (e.g., lobbying filings vs contract awards) cluster suspiciously. Permutation test, one-tailed p-value.
+8. **Dynamic MCP discovery** — if Tier 1 + public records results are thin, discover and connect to MCP-wrapped OSINT servers
+9. **Compile** — record provenance, assign confidence, escalate to Tier 2/3 only as permitted
+10. **Brief** — render markdown brief (see Output requirements). Near-match profiles surfaced explicitly, not discarded.
+11. **Emit & journal** — store findings, emit Signal files per confirmed entity (with `user_relevance`), write journal via `scout.journal`
 
 When `minimize_pii=true`, suppress unnecessary sensitive details in the final brief.
 
@@ -175,15 +146,17 @@ Read `references/scout_source_waterfall.md` for full tier logic.
 
 - **Tier 1 — Person-specific tools** — theHarvester, OpenSanctions, Sherlock, Maigret, Holehe, h8mail, EmailRep, Ghunt, PhoneInfoga. See `references/scout_person_sources.md` for full list and execution order.
 - **Web + platform search** — public web via SearchX (local SearXNG), including Twitter/X, Reddit, LinkedIn, GitHub. Always runs.
+- **Tier 1.5 — Public records** — SEC EDGAR, USAspending, Senate lobbying (LD-1/LD-2), OFAC SDN sanctions, ICIJ offshore leaks, NYC property records (ACRIS), OpenCorporates, CourtListener, Wayback Machine, Wikipedia/Wikidata, GDELT. Python stdlib-only fetch scripts. Runs for company/org research or when person research reveals corporate ties. See `references/scout_public_records.md`.
 - **Tier 2** — rate-limited sources, registries, MCP-discovered servers. Only if enabled and useful.
 - **Tier 3** — paid OSINT providers, background databases. Requires explicit permission grant.
 
 ## Output requirements
 
-Markdown brief: Executive Summary, Identity Resolution Notes, Findings, Social Graph (if handles found), Digital Footprint (if email/phone tools ran), Risk and Uncertainty, Source Log. Every finding carries source-backed provenance.
+Markdown brief: Executive Summary, Identity Resolution Notes, Findings, Social Graph (if handles found), Digital Footprint (if email/phone tools ran), Public Records (if public-records investigation ran), Risk and Uncertainty, Source Log. Every finding carries source-backed provenance.
 
 - **Social Graph**: verified profiles (platform, URL, discovery method, verification evidence) + unverified leads separately. Omit if no handles found.
 - **Digital Footprint**: email accounts (Holehe), breaches (h8mail/HIBP), Google data (Ghunt), phone metadata (PhoneInfoga), email risk (EmailRep), dark web (OnionClaw). Omit if no data available.
+- **Public Records**: corporate filings (SEC EDGAR), government contracts (USAspending), lobbying disclosures (Senate LD-1/LD-2), sanctions (OFAC SDN), offshore leaks (ICIJ), property records (NYC ACRIS), corporate registry (OpenCorporates), court records (CourtListener), web archives (Wayback), knowledge base (Wikipedia/Wikidata), news monitoring (GDELT). Omit if no public-records investigation was run.
 
 Read `references/scout_brief_template.md` for the full template.
 
@@ -202,26 +175,11 @@ Implements the recovery contract from `spec-ocas-recovery.md`.
 
 ## Storage layout
 
-```
-{agent_root}/commons/data/ocas-scout/    → config, JSONL files, briefs/, reports/, caches
-{agent_root}/commons/journals/ocas-scout/ → YYYY-MM-DD/{run_id}.json
-```
-
-Read `references/scout_config.md` for default config.json and field descriptions.
+See `references/storage-layout.md` for directory structure. Read `references/scout_config.md` for default config.json and field descriptions.
 
 ## OKRs
 
-```yaml
-skill_okrs:
-  - {name: verified_claim_ratio, target: 0.70, window: 30_runs}
-  - {name: entity_resolution_accuracy, target: 0.90, window: 30_runs}
-  - {name: source_diversity, target: 6, window: 30_runs}
-  - {name: person_tool_coverage, target: 0.80, window: 30_runs}
-  - {name: schedule_adherence, target: 0.95, window: 30_days}
-  - {name: data_integrity, target: 0.99, window: 30_days}
-```
-
-All metrics: maximize. Universal OKRs from spec-ocas-journal.md apply.
+See `references/okrs.md` for skill OKR definitions.
 
 ## Optional skill cooperation
 
@@ -282,6 +240,10 @@ Monitors: [awesome-osint-mcp-servers](https://github.com/soxoj/awesome-osint-mcp
 - **`gh api` base64 content is unreliable for counting** — `gh api repos/<owner>/<repo>/readme --jq '.content' | base64 -d` can silently return truncated or empty results. For fetching raw GitHub README content, use `curl -s "https://raw.githubusercontent.com/<owner>/<repo>/<branch>/README.md"` instead. This returns clean text that `wc -l` and `grep` can process directly.
 - **Branch names vary across repos** — `jivoi/awesome-osint` uses `master` (not `main`). Always verify branch name with a quick `curl -s -o /dev/null -w "%{http_code}"` probe before fetching content.
 - **curl timeout for unreliable endpoints** — Some GitHub endpoints return 0 bytes under rate-limiting. Use `--max-time 15` and check HTTP status code before processing output.
+- **Public-records scripts use stdlib only** — All fetch scripts in `scripts/fetch_*.py` use Python stdlib only (no pip installs required). They use `urllib.request` with retry logic and respect `Retry-After` headers. 429 responses surface immediately with the upstream's quota message.
+- **Entity resolution is token-bag only** — `entity_resolution.py` does NOT use external fuzzy libraries (no rapidfuzz, no jellyfish). Token-bag matching is the upper bound. For Levenshtein, transliteration, or phonetic matching, pip-install separately.
+- **ICIJ offshore leaks cache** — First run downloads ~70 MB bulk CSV. Cached for 30 days under `$HERMES_OSINT_CACHE/icij/` (default: `~/.cache/hermes-osint/icij/`). Subsequent runs search the local cache.
+- **Statistical significance ≠ wrongdoing** — `timing_analysis.py` p < 0.05 means the timing pattern is unlikely under the null. It does not establish corruption. Always state this in the brief.
 
 ## Support File Map
 
@@ -292,11 +254,12 @@ Monitors: [awesome-osint-mcp-servers](https://github.com/soxoj/awesome-osint-mcp
 | `references/scout_source_waterfall.md` | Before tier selection or escalation |
 | `references/scout_brief_template.md` | Before rendering briefs |
 | `references/scout_person_sources.md` | At start of every person research run |
-|| `references/scout_mcp_discovery.md` | Before `scout.sources.discover`; before Tier 2 escalation |
-|| `references/rapidapi-osint-params.md` | Before RapidAPI enrichment; param patterns per platform |
-|| `references/rapidapi-enrichment-workflow.md` | During Phase 3/4 research; RapidAPI person/company enrichment pipelines |
-|| `references/journal.md` | Before scout.journal; at end of every run |
-|| `references/self_update.md` | Before running `scout.update`; when debugging self-update failures |
+| `references/scout_public_records.md` | At start of every company/org research run; when person research reveals corporate ties; before Phase 5 |
+| `references/scout_mcp_discovery.md` | Before `scout.sources.discover`; before Tier 2 escalation |
+| `references/rapidapi-osint-params.md` | Before RapidAPI enrichment; param patterns per platform |
+| `references/rapidapi-enrichment-workflow.md` | During Phase 3/4 research; RapidAPI person/company enrichment pipelines |
+| `references/journal.md` | Before scout.journal; at end of every run |
+| `references/self_update.md` | Before running `scout.update`; when debugging self-update failures |
 
 ## Update command
 

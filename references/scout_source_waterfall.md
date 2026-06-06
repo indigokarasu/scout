@@ -65,6 +65,45 @@ Benefits:
 - No additional latency (parallel execution)
 - Shared infrastructure — improvements to Sift's search benefit all skills
 
+### Tier 1.5 — Public Records Investigation (Company/Org Research)
+
+For company/org research or when person research reveals corporate ties, run public-records fetch scripts. All scripts use Python stdlib only — zero install. Most sources work without API keys.
+
+**Always run (company/org research):**
+- **OpenCorporates** — global corporate registry (130+ jurisdictions). Free token required (`OPENCORPORATES_API_TOKEN`).
+- **OFAC SDN** — sanctions screening. No key needed.
+- **Wikipedia/Wikidata** — narrative bio + structured facts. Set `HERMES_OSINT_UA` per Wikimedia policy.
+- **GDELT** — global news monitoring. No key needed.
+
+**When subject is a public company or known officer/director:**
+- **SEC EDGAR** — corporate filings (10-K, 10-Q, 3/4/5). Set `SEC_USER_AGENT` per SEC fair-use policy.
+
+**When subject is a government contractor:**
+- **USAspending** — federal contracts, grants. No key needed.
+
+**When subject has lobbying ties:**
+- **Senate LD-1/LD-2** — lobbying disclosures. Token optional (`SENATE_LDA_TOKEN` raises rate limit).
+
+**When litigation history needed:**
+- **CourtListener** — federal + state court opinions. Token optional (`COURTLISTENER_TOKEN` raises rate limit).
+
+**When offshore ties suspected:**
+- **ICIJ Offshore Leaks** — offshore entities, beneficial ownership. ~70 MB download on first run, cached 30 days.
+
+**When NYC property records needed:**
+- **NYC ACRIS** — deeds, mortgages, liens. No key needed.
+
+**When recovering dead URLs or historical context:**
+- **Wayback Machine** — web archives. No key needed.
+
+**Execution order:** See `references/scout_public_records.md` for parallel execution groups, cross-reference keys, and timing correlation.
+
+**Entity resolution:** After fetching, run `entity_resolution.py` to cross-link entities between public-records CSVs and person-tool findings. Three match tiers: exact (high), fuzzy (medium), token_overlap (low).
+
+**Timing correlation (optional):** Run `timing_analysis.py` to test whether event time series cluster suspiciously (e.g., lobbying filings near contract awards). Permutation test, one-tailed p-value.
+
+**Evidence chain:** Run `build_findings.py` to produce structured findings JSON with `id, title, severity, confidence, summary, evidence[], sources[]`.
+
 ### Tier 1.5 — RapidAPI Social Enrichment (Structured APIs)
 
 After Tier 1 free tools and platform search, but before Tier 2 expensive tools, use RapidAPI to get **structured profile data** from social media platforms. This is especially useful when:
