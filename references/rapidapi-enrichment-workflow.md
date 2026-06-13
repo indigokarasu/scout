@@ -129,7 +129,7 @@ For every RapidAPI call that returns data:
 - If an API returns "not subscribed" or "quota exceeded", skip and try the next variant
 - Twitter: try twitter154 first, fall back to twitter/twitter-x-api
 - Instagram: try instagram-looter2 first, fall back to instagram-scraper-stable-api / flashapi1
-- LinkedIn: try linkedin-bulk-data-scraper first, fall back to linkedin-api8 / linkedin-api-data
+- LinkedIn: fresh-linkedin-scraper-api (primary) → linkedinscraper → linkedin-email-finder5 → linkedin-lead-enrichment. 5 old APIs non-functional.
 - Never block the research pipeline on a single API failure
 
 ## Integration with Existing Tiers

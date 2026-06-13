@@ -1,14 +1,6 @@
 ---
 name: ocas-scout
-description: 'Scout: structured OSINT research on people, companies, and organizations.
-  Use when the user wants a provenance-backed brief, entity resolution across public
-  sources, background research with cited sources, or a free-first research workflow
-  that escalates to paid sources only with explicit permission. Trigger phrases: ''research
-  this person'', ''who is'', ''background check'', ''look up this company'', ''what
-  do we know about'', ''update scout''. Do not use for topic research without a person/org
-  focus (use Sift) or illegal data collection.
-
-  '
+description: 'Structured OSINT research on people, companies, and organizations. Use for provenance-backed briefs, entity resolution across public sources, background research with cited sources, or free-first research workflows that escalate to paid sources only with explicit permission. Do not use for topic research without a person/org focus (use Sift) or illegal data collection.'
 license: MIT
 source: https://github.com/indigokarasu/scout
 includes:
@@ -17,6 +9,12 @@ includes:
 metadata:
   author: Indigo Karasu (indigokarasu)
   version: 4.0.0
+tags:
+- OSINT
+- research
+- people
+- companies
+- investigation
 triggers:
 - osint research
 - people research
@@ -26,7 +24,7 @@ triggers:
 ---
 ## Interactive Menu
 
-When invoked interactively (via `/` command), present a two-level menu. See `references/interactive-menu.md` for the menu structure and response parsing logic.
+When invoked interactively, present a two-level menu. See `references/interactive-menu.md` for the full menu structure.
 
 ## When to Use
 
@@ -236,7 +234,7 @@ Monitors: [awesome-osint-mcp-servers](https://github.com/soxoj/awesome-osint-mcp
 - **Hard cap at 2 Sherlock passes** — Recursive handle discovery is allowed for exactly 1 additional pass (2 total). Further recursion is silently blocked regardless of leads found.
 - **Identity gate requires 2+ data points** — A username match alone produces only `unverified_lead` status. Profiles are `verified` only when 2+ seed data points overlap (name + location, etc.).
 - **minimize_pii suppresses home addresses and personal details** — When the user sets `minimize_pii=true`, the final brief suppresses unnecessary sensitive details even if they were found during research. Re-run without the flag to see full data.
-- **`execute_code` blocked in cron mode** — When Scout runs as a scheduled cron job, `execute_code` is denied by policy. Use `terminal()` for all shell commands and Python workarounds. Structure multi-step work as a single piped `terminal()` call rather than relying on `execute_code` for programmatic logic.
+- **"Not subscribed" ≠ broken on RapidAPI.** Many APIs return tools on `tools/list` but "You are not subscribed to this API" on actual calls. These are tier-gated by the provider, not broken. 3 genuinely broken LinkedIn APIs (linkedin-data-api, linkedin-api8, li-data-scraper) — provider shut down. 4 new ones work: fresh-linkedin-scraper-api (primary), linkedinscraper, linkedin-email-finder5, linkedin-lead-enrichment.
 - **`gh api` base64 content is unreliable for counting** — `gh api repos/<owner>/<repo>/readme --jq '.content' | base64 -d` can silently return truncated or empty results. For fetching raw GitHub README content, use `curl -s "https://raw.githubusercontent.com/<owner>/<repo>/<branch>/README.md"` instead. This returns clean text that `wc -l` and `grep` can process directly.
 - **Branch names vary across repos** — `jivoi/awesome-osint` uses `master` (not `main`). Always verify branch name with a quick `curl -s -o /dev/null -w "%{http_code}"` probe before fetching content.
 - **curl timeout for unreliable endpoints** — Some GitHub endpoints return 0 bytes under rate-limiting. Use `--max-time 15` and check HTTP status code before processing output.
