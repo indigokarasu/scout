@@ -32,3 +32,24 @@ rm -rf "$TMPDIR"
 - All journals under `{agent_root}/commons/journals/ocas-scout/`
 - All data under `{agent_root}/commons/data/ocas-scout/`
 - Local `config.json` (not overwritten by upstream default)
+
+## Git-based update (when repo is a git clone)
+
+If the skill directory is a git clone (check with `git -C <dir> rev-parse --is-inside-work-tree`), prefer git-based update over the tarball method:
+
+```bash
+cd <skill_dir>
+git fetch origin
+BEHIND=$(git log --oneline HEAD..origin/main | wc -l)
+if [ "$BEHIND" -eq 0 ]; then
+    echo "Already up to date."
+    exit 0
+fi
+git stash
+git pull --rebase origin main
+git stash pop || true
+```
+
+**Merge conflicts:** If `git stash pop` produces conflicts (e.g., in `SKILL.md`), resolve by accepting upstream (`git checkout --theirs <file>`), then `git add <file>` and `git stash drop`. The upstream version is authoritative for skill files; local modifications are typically journal/evidence artifacts that live outside the skill dir.
+
+**Why git over tarball:** The tarball `cp -R` approach silently overwrites local changes. Git surfaces conflicts so they can be resolved intentionally.
