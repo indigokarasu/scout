@@ -1,7 +1,7 @@
 # Scout Person-Specific OSINT Sources
 
 Curated list of person-specific OSINT tools and APIs, organized by capability.
-Updated: 2026-05-31. Sources reviewed from jivoi/awesome-osint, laramies/theHarvester,
+Updated: 2026-06-14. Sources reviewed from jivoi/awesome-osint, laramies/theHarvester,
 apurvsinghgautam/robin, cipher387/API-s-for-OSINT, soxoj/awesome-osint-mcp-servers,
 and christinminor459/OnionClaw.
 
@@ -246,6 +246,12 @@ These are MCP servers that can be connected via the `native-mcp` skill or `mcpor
 | **Expose Team** | expose.team | AI-powered OSINT, credit-based ($8+/mo) |
 | **Checko MCP** | Nymaxxx/checko-mcp | Russian company/individual verification (EGRUL/EGRIP), paid |
 | **StockScope** | Stewyboy1990/companyscope-mcp | SEC EDGAR financial intelligence, free |
+| **AnySite** | anysite.io | Structured data from 115+ endpoints across 40+ platforms (LinkedIn, Instagram, X, Reddit, YouTube, GitHub, Amazon) — 7-day free trial, then paid |
+| **Bright Data MCP** | brightdata/brightdata-mcp | Real-time web search, scraping, structured data from 60+ sources (LinkedIn, TikTok, Google Maps, etc.) — free tier 5,000 req/mo |
+| **US Business Data MCP** | avabuildsdata/mcp-us-business-data | Secretary of State business registrations (17 US states), building permits (400+ cities), Yellow Pages — paid |
+| **OpenOSINT** | OpenOSINT/OpenOSINT | AI-powered OSINT agent with interactive REPL, MCP server, and CLI — free tier available |
+| **TWZRD Agent Intel** | intel.twzrd.xyz | Blockchain OSINT for AI agent trust scoring (Solana wallet history, transaction patterns) — free preflight + paid signed receipts |
+| **The Stall** | the-stall.intuitek.ai | Multi-tool blockchain OSINT: OFAC sanctions screening (19k+ SDN), wallet risk scoring, agent KYA trust scoring — pay-per-call via x402 USDC on Base |
 
 **Scout workflow integration:**
 - See `scout_mcp_discovery.md` for the dynamic discovery mechanism.
