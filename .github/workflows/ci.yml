@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Lint scripts
+        run: ruff check scripts/
+
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Syntax check Python files
+        run: |
+          python -m py_compile scripts/*.py
+          echo "All Python files compile OK"
+
+      - name: Validate SKILL.md YAML
+        run: |
+          python3 -c "
+          import yaml, pathlib
+          p = pathlib.Path('SKILL.md')
+          data = yaml.safe_load(p.read_text())
+          assert 'name' in data, 'Missing name'
+          assert 'description' in data, 'Missing description'
+          print(f'SKILL.md valid: {data[\"name\"]} v{data.get(\"metadata\",{}).get(\"version\",\"?\")}')
+          "
