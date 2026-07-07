@@ -25,12 +25,14 @@ Scout periodically checks curated GitHub lists for new person-specific tools.
 
 **Review process (runs weekly via cron):**
 
-1. Fetch the latest README from each list via `gh api`
-2. Parse for new entries since last review (compare against cached hash)
+See `references/sources-refresh.md` for the complete step-by-step procedure. The short version:
+
+1. Fetch the latest README from each list via `curl` (probe branch first)
+2. Parse for new entries since last review (compare SHA-256 hash against cache)
 3. Filter for person-specific tools (skip infrastructure/network-only tools)
 4. Classify: Tier 1 (free, no key), Tier 2 (freemium), Tier 3 (paid)
-5. Append new entries to `scout_person_sources.md`
-6. Log additions in the scout journal
+5. Append new entries to `references/scout_person_sources.md`
+6. Update hash cache, write journal, log evidence
 
 ### Layer 2: Live MCP Registry Query (Runtime)
 

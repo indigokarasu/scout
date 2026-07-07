@@ -42,7 +42,7 @@ When invoked interactively, present a two-level menu. See `references/interactiv
 
 # Scout
 
-Scout conducts lawful OSINT research on people, companies, and organizations, assembling provenance-backed briefs where every claim carries a source reference, retrieval timestamp, and direct quote. It works through a tiered source waterfall — public web first, then rate-limited registries, then paid databases only with explicit permission — collecting no more than the stated research goal requires.
+Scout conducts lawful OSINT research on people, companies, and organizations, assembling provenance-backed briefs where every claim carries a source reference, retrieval timestamp, and direct quote. It works through a tiered source waterfall — public web first, then rate-limited registries, then paid databases only with explicit permission — collecting no more than the stated research goal requires. This tiered approach exists because paid sources require explicit consent and rate-limited registries need careful quota management to avoid service degradation.
 
 Scout integrates curated person-specific OSINT tools (theHarvester, Maigret, Holehe, h8mail, PhoneInfoga, and others), a public-records investigation framework (SEC EDGAR, USAspending, Senate lobbying, OFAC sanctions, ICIJ offshore leaks, NYC property records, OpenCorporates, CourtListener, Wayback Machine, Wikipedia/Wikidata, GDELT), and dynamically discovers new MCP-wrapped OSINT servers at runtime.
 
@@ -164,6 +164,8 @@ Scout writes Signal files to Elephas (via journal signal payload). One Signal pe
 
 ## Recovery Behavior
 
+This section defines error handling and recovery procedures for all scout jobs.
+
 Implements the recovery contract from `spec-ocas-recovery.md`.
 
 - **Evidence**: Every run writes to `{agent_root}/commons/data/ocas-scout/evidence.jsonl` (including no-op runs; `not_activity_reason` mandatory when no side effects).
@@ -225,7 +227,7 @@ Read `references/self_update.md` for the full self-update procedure.
 
 ## External Catalog Review
 
-Monitors: [awesome-osint-mcp-servers](https://github.com/soxoj/awesome-osint-mcp-servers) (weekly), [awesome-osint](https://github.com/jivoi/awesome-osint) (monthly), [API-s-for-OSINT](https://github.com/cipher387/API-s-for-OSINT) (monthly). New tools classified by tier → added to `references/scout_person_sources.md`. See `references/scout_mcp_discovery.md` for dynamic discovery.
+Monitors: [awesome-osint-mcp-servers](https://github.com/soxoj/awesome-osint-mcp-servers) (weekly), [awesome-osint](https://github.com/jivoi/awesome-osint) (monthly), [API-s-for-OSINT](https://github.com/cipher387/API-s-for-OSINT) (monthly). New tools classified by tier → added to `references/scout_person_sources.md`. See `references/scout_mcp_discovery.md` for dynamic discovery. See `references/sources-refresh.md` for the concrete refresh procedure that runs on the `scout:sources-refresh` cron.
 
 ## Gotchas
 
@@ -254,6 +256,7 @@ Monitors: [awesome-osint-mcp-servers](https://github.com/soxoj/awesome-osint-mcp
 | `references/scout_person_sources.md` | At start of every person research run |
 | `references/scout_public_records.md` | At start of every company/org research run; when person research reveals corporate ties; before Phase 5 |
 | `references/scout_mcp_discovery.md` | Before `scout.sources.discover`; before Tier 2 escalation |
+| `references/sources-refresh.md` | Before `scout.sources.refresh`; before weekly cron refresh runs |
 | `references/rapidapi-osint-params.md` | Before RapidAPI enrichment; param patterns per platform |
 | `references/rapidapi-enrichment-workflow.md` | During Phase 3/4 research; RapidAPI person/company enrichment pipelines |
 | `references/journal.md` | Before scout.journal; at end of every run |
