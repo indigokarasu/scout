@@ -9,6 +9,15 @@ includes:
 metadata:
   author: Indigo Karasu (indigokarasu)
   version: 4.0.0
+  hermes:
+    category: research
+    tags:
+    - OSINT
+    - research
+    - people
+    - companies
+    - investigation
+    - OCAS-core
 tags:
 - OSINT
 - research
@@ -124,17 +133,17 @@ Full step-by-step workflow with tool commands, handle expansion logic, identity 
 
 **Phase summary:**
 
-1. **Normalize** — parse request, validate subject identity inputs
-2. **Tier 1 collection** — run person-specific tools (theHarvester, OpenSanctions) and public web search in parallel
-3. **Handle expansion** — extract handles, run Sherlock/Maigret, apply identity gate (inv 7), tiered verification (inv 8), recursion cap at 2 passes (inv 9)
-4. **Email/phone tools** — run Holehe, h8mail, EmailRep, Ghunt (if Gmail), PhoneInfoga as data is available
-5. **Public records investigation** — for company/org research or when person research reveals corporate ties, run public-records fetch scripts (SEC EDGAR, USAspending, Senate lobbying, OFAC sanctions, ICIJ offshore leaks, OpenCorporates, CourtListener, NYC ACRIS, Wayback Machine, Wikipedia/Wikidata, GDELT). See `references/scout_public_records.md` for source selection, execution order, and cross-reference keys.
-6. **Entity resolution across sources** — normalize names, run `entity_resolution.py` to cross-link entities between public-records CSVs and person-tool findings. Three match tiers: exact (high), fuzzy (medium), token_overlap (low).
-7. **Timing correlation (optional)** — run `timing_analysis.py` to test whether event time series (e.g., lobbying filings vs contract awards) cluster suspiciously. Permutation test, one-tailed p-value.
-8. **Dynamic MCP discovery** — if Tier 1 + public records results are thin, discover and connect to MCP-wrapped OSINT servers
-9. **Compile** — record provenance, assign confidence, escalate to Tier 2/3 only as permitted
-10. **Brief** — render markdown brief (see Output requirements). Near-match profiles surfaced explicitly, not discarded.
-11. **Emit & journal** — store findings, emit Signal files per confirmed entity (with `user_relevance`), write journal via `scout.journal`
+- [ ] **Normalize** — parse request, validate subject identity inputs
+- [ ] **Tier 1 collection** — run person-specific tools (theHarvester, OpenSanctions) and public web search in parallel
+- [ ] **Handle expansion** — extract handles, run Sherlock/Maigret, apply identity gate (inv 7), tiered verification (inv 8), recursion cap at 2 passes (inv 9)
+- [ ] **Email/phone tools** — run Holehe, h8mail, EmailRep, Ghunt (if Gmail), PhoneInfoga as data is available
+- [ ] **Public records investigation** — for company/org research or when person research reveals corporate ties, run public-records fetch scripts (SEC EDGAR, USAspending, Senate lobbying, OFAC sanctions, ICIJ offshore leaks, OpenCorporates, CourtListener, NYC ACRIS, Wayback Machine, Wikipedia/Wikidata, GDELT). See `references/scout_public_records.md` for source selection, execution order, and cross-reference keys.
+- [ ] **Entity resolution across sources** — normalize names, run `entity_resolution.py` to cross-link entities between public-records CSVs and person-tool findings. Three match tiers: exact (high), fuzzy (medium), token_overlap (low).
+- [ ] **Timing correlation (optional)** — run `timing_analysis.py` to test whether event time series (e.g., lobbying filings vs contract awards) cluster suspiciously. Permutation test, one-tailed p-value.
+- [ ] **Dynamic MCP discovery** — if Tier 1 + public records results are thin, discover and connect to MCP-wrapped OSINT servers
+- [ ] **Compile** — record provenance, assign confidence, escalate to Tier 2/3 only as permitted
+- [ ] **Brief** — render markdown brief (see Output requirements). Near-match profiles surfaced explicitly, not discarded.
+- [ ] **Emit & journal** — store findings, emit Signal files per confirmed entity (with `user_relevance`), write journal via `scout.journal`
 
 When `minimize_pii=true`, suppress unnecessary sensitive details in the final brief.
 

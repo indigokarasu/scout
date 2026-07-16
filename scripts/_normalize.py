@@ -5,6 +5,13 @@ Used by entity_resolution.py and timing_analysis.py.
 from __future__ import annotations
 
 import re
+import sys
+
+_HELP_ARGS = {"--help", "-h"}
+if set(sys.argv[1:]) & _HELP_ARGS:
+    print((__doc__ or "").strip() or "Usage: python3 _normalize.py")
+    sys.exit(0)
+
 
 # Legal suffixes / corporate boilerplate to strip during normalization.
 _SUFFIX_TOKENS = {

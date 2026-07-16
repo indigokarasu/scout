@@ -10,6 +10,13 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import sys
+
+_HELP_ARGS = {"--help", "-h"}
+if set(sys.argv[1:]) & _HELP_ARGS:
+    print((__doc__ or "").strip() or "Usage: python3 _http.py")
+    sys.exit(0)
+
 
 DEFAULT_UA = (
     "hermes-osint-investigation/0.2 "
