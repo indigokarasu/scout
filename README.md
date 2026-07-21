@@ -1,7 +1,7 @@
 # scout
 
 <p align="center">
-<img src="./assets/readme/hero.svg" width="100%" alt="Scout: structured OSINT research — lawful people, company, and organization research with full provenance.">
+<img src="./assets/readme/hero.jpg" width="100%" alt="Scout: structured OSINT research — lawful people, company, and organization research with full provenance.">
 </p>
 
 scout — Scout: structured OSINT research — lawful people, company, and organization research with full provenance.
