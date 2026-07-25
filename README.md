@@ -8,7 +8,7 @@ Structured OSINT research on people, companies, and organizations. Use for prove
 **Version:** 4.0.0
 **Type:** 
 **Layer:** research
-**Author:** Indigo Karasu
+**Author:** <agent-name>
 
 ---
 
