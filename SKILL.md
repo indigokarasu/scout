@@ -2,7 +2,7 @@
 name: ocas-scout
 description: 'Structured OSINT research on people, companies, and organizations. Use for provenance-backed briefs, entity resolution across public sources, background research with cited sources, or free-first research workflows that escalate to paid sources only with explicit permission. Do not use for topic research without a person/org focus (use Sift) or illegal data collection.'
 license: MIT
-source: https://github.com/indigokarasu/scout
+source: https://github.com/<agent-handle>/scout
 includes:
 - references/**
 - scripts/**
