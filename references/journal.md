@@ -27,8 +27,8 @@ Scout emits Observation Journals for research runs and Research Journals for str
     "journal_type": "observation"
   },
   "runtime": {
-    "model": "claude-sonnet-4-6",
-    "provider": "anthropic",
+    "model": "<model-id-from-profile-config>",
+    "provider": "<provider-from-profile-config>",
     "temperature": null,
     "context_window": "200k",
     "node": "macstudio-01",
