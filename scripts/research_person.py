@@ -767,6 +767,45 @@ def _name_agreement(contact_name, profile_fullname):
     return shared, fam_present
 
 
+def _handle_is_bare_name_part(handle, name, name_given="", name_family=""):
+    """True when the handle is nothing more than one part of the contact's name.
+
+    A bare first or last name — or an initial plus one of them — is shared by
+    every namesake on every site, so it is not a searchable anchor: a sweep on it
+    returns strangers, and a profile agreeing on that one name part tells us
+    nothing about which of them we found. Handles carrying anything further are
+    left alone, because they are specific enough that name agreement is real
+    evidence, which is the discriminator this pipeline relies on
+    (a handle combining both name parts, or one sharing no name token at all).
+    """
+    h = re.sub(r"[^a-z0-9]", "", (handle or "").lower())
+    if not h:
+        return False
+    given, family = _split_name(name, name_given, name_family)
+    f = re.sub(r"[^a-z0-9]", "", (family or "").lower())
+    g = re.sub(r"[^a-z0-9]", "", (given or "").lower())
+
+    # Exactly one name part and nothing else.
+    if (g and h == g) or (f and h == f):
+        return True
+
+    for part in (f, g):
+        if len(part) < 3 or part not in h:
+            continue
+        idx = h.find(part)
+        prefix, suffix = h[:idx], h[idx + len(part):]
+        # Trailing characters are entropy the owner chose — few namesakes pick
+        # exactly <surname>+digits — so the handle is more than a name part.
+        if suffix:
+            continue
+        # A single leading letter is an initial: it abbreviates the other name
+        # into one of 26 values and identifies nobody (<initial><surname>).
+        if len(prefix) == 1 and prefix.isalpha():
+            return True
+        # Anything longer in front is another name or word, which makes the
+        # handle specific: <given><surname> carries the whole name.
+    return False
+
 def _name_confirms(contact_name, profile_fullname):
     """Strict 'this profile's own name IS the contact's name'.
 
@@ -977,7 +1016,28 @@ def research_person(name, email="", employer="", handles=None, phone="",
         # corroboration gate applies; these are only extra things to test.
         _seed(name_handle_variants(name, name_given, name_family), "name")
 
-    maigret_handles = [h for h in handle_candidates if _handle_ok(h)][:MAX_MAIGRET_HANDLES]
+    # A bare first or last name is not an anchor: maigret reports that the handle
+    # exists, and a bare name part exists nearly everywhere owned by strangers,
+    # so sweeping it manufactures namesakes. Skipping it outright is both safer
+    # and cheaper than discounting 127 profiles afterwards. Curated URLs are not
+    # affected — expand_known_urls() reads them without maigret.
+    _sweepable, _bare = [], []
+    for h in handle_candidates:
+        if not _handle_ok(h):
+            continue
+        if _handle_is_bare_name_part(h, name, name_given, name_family):
+            _bare.append(h)
+        else:
+            _sweepable.append(h)
+    maigret_handles = _sweepable[:MAX_MAIGRET_HANDLES]
+    result["skipped_handles"] = [
+        {"handle": h, "reason": "bare name part — sweeping it finds namesakes"}
+        for h in _bare]
+    if _bare and not maigret_handles:
+        result["identity"]["reason"] = (
+            "no searchable handle: %s %s only the contact's own name, which "
+            "matches strangers on every site"
+            % (", ".join(_bare[:3]), "are" if len(_bare) > 1 else "is"))
 
     # ---- Maigret across each handle candidate; collect claimed profiles.
     all_profiles = {}  # site -> profile (curated wins, then first handle)
@@ -1021,13 +1081,31 @@ def research_person(name, email="", employer="", handles=None, phone="",
         # passes. Report zero corroboration to consumers (weave_enrich filters
         # on name_shared_tokens / family_present) and keep the raw measurement
         # under *_raw for audit.
-        if prof.get("provenance") == "maigret" and prof.get("handle_origin") == "name":
+        _is_maigret = prof.get("provenance") == "maigret"
+        if _is_maigret and prof.get("handle_origin") == "name":
             prof["circular_anchor"] = True
             prof["name_shared_tokens_raw"] = shared
             prof["family_present_raw"] = fam
             prof["corroboration_note"] = (
                 "handle derived from the contact's name — name agreement here "
                 "is circular, not independent evidence")
+            shared, fam = 0, False
+        elif (_is_maigret and shared < 2
+              and _handle_is_bare_name_part(prof.get("handle", ""), name,
+                                            name_given, name_family)):
+            # An observed handle was trusted as an independent anchor regardless
+            # of how generic it was. A bare surname is shared by thousands, so
+            # family-name agreement is the same signal checking itself. Full-name
+            # agreement (shared >= 2) is exempt above: the given name is not
+            # derivable from a surname handle, so a profile showing both is
+            # genuine corroboration.
+            prof["circular_anchor"] = True
+            prof["name_shared_tokens_raw"] = shared
+            prof["family_present_raw"] = fam
+            prof["corroboration_note"] = (
+                "handle carries no more signal than the surname, so family-name "
+                "agreement is not independent evidence; only a profile naming "
+                "the contact in full would count")
             shared, fam = 0, False
 
         prof["name_shared_tokens"] = shared
