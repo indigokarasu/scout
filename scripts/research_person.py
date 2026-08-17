@@ -44,9 +44,13 @@ URLs the user hand-entered), it:
      A curated URL whose FETCHED name names someone else is marked
      name_conflict and is excluded from anchors and enrichment entirely.
   6. FALLS BACK to a capped SearXNG name+org / name+occupation search when the
-     handle pivot corroborates nothing. Those results are returned as
-     UNVERIFIED CANDIDATES only. They never raise the identity level and never
-     produce enrichment.
+     handle pivot corroborates nothing. A candidate that is never opened cannot
+     corroborate anything, so raw snippets are returned as UNVERIFIED CANDIDATES
+     and neither raise the identity level nor produce enrichment. A candidate
+     whose page IS fetched and whose text names the contact — given and family
+     name adjacent, not merely both present somewhere on the page — meets the
+     same corroboration standard as any other profile and does count. Those
+     pages appear in identity.corroborating_sites.
   7. Emits scout Findings (finding_id / claim / confidence / source_refs) plus
      structured enrichment fields, each with provenance.
 
@@ -806,6 +810,123 @@ def _handle_is_bare_name_part(handle, name, name_given="", name_family=""):
         # handle specific: <given><surname> carries the whole name.
     return False
 
+def _name_phrase_in_text(name, text, name_given="", name_family="", max_gap=2):
+    """True when the text names the contact, rather than merely containing both
+    of their name tokens somewhere.
+
+    Token overlap over a whole page cannot tell "<Given> <Family> is a ..." apart
+    from a list of unrelated people that happens to include a <Given> and a
+    <Family>. Requiring adjacency is the difference. A middle name or initial may
+    sit between the two, and the "<Family>, <Given>" ordering is accepted.
+    """
+    given, family = _split_name(name, name_given, name_family)
+    g = re.sub(r"[^a-z0-9]", "", (given or "").lower())
+    f = re.sub(r"[^a-z0-9]", "", (family or "").lower())
+    if not g or not f:
+        return False
+    low = (text or "").lower()
+    g_spans = [m.span() for m in re.finditer(r"\b" + re.escape(g) + r"\b", low)]
+    f_spans = [m.span() for m in re.finditer(r"\b" + re.escape(f) + r"\b", low)]
+    if not g_spans or not f_spans:
+        return False
+    # Directly adjacent, allowing only whitespace or a hyphen between.
+    _JOIN = re.compile(r"[\s\-]*")
+    # One intervening word: a middle name or an initial. A comma or semicolon is
+    # excluded on purpose — that is what separates two people in a list.
+    _MIDDLE = re.compile(r"[\s\-]*[a-z]{1,12}\.?[\s\-]*")
+    # The "<Family>, <Given>" ordering, where the comma is part of the form.
+    _INVERTED = re.compile(r"\s*,\s*")
+    for gs in g_spans:
+        for fs in f_spans:
+            if fs[0] >= gs[1]:
+                between = low[gs[1]:fs[0]]
+                if _JOIN.fullmatch(between) or (
+                        max_gap >= 1 and _MIDDLE.fullmatch(between)):
+                    return True
+            elif gs[0] >= fs[1]:
+                if _INVERTED.fullmatch(low[fs[1]:gs[0]]):
+                    return True
+    return False
+
+# ── Sites where a handle "existing" carries no information ───────────────────
+# Some sites serve a profile-shaped page for any string. Measured: picsart and
+# trello returned byte-identical pages for a real handle and for one that cannot
+# exist, while github, calendly and snapchat answered 404 for the control. Without
+# this check every swept contact collected "profiles" on the permissive sites.
+_CONTROL_HANDLE = "qx7zzvnoexist4419"
+_SOFT404_TTL = 30 * 86400
+_SOFT404_CACHE = Path(
+    os.environ.get("HERMES_HOME") or os.path.expanduser("~/.hermes")
+) / "commons" / "data" / "ocas-scout" / "soft404-sites.json"
+
+
+def _soft404_cache_read():
+    try:
+        return json.loads(_SOFT404_CACHE.read_text())
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def _soft404_cache_write(cache):
+    try:
+        _SOFT404_CACHE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = _SOFT404_CACHE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(cache, indent=1, sort_keys=True))
+        tmp.replace(_SOFT404_CACHE)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def site_answers_for_any_handle(url, handle):
+    """True when the site returns the same page for a handle that cannot exist.
+
+    Finding a handle on such a site is not evidence that an account is there, let
+    alone whose it is. Inconclusive probes return False on purpose: a site is
+    never rejected because the measurement failed. Cached per host for 30 days.
+    """
+    if not url or not handle or handle.lower() not in url.lower():
+        return False
+    host = _host_of(url)
+    if not host:
+        return False
+    cache = _soft404_cache_read()
+    ent = cache.get(host)
+    now = time.time()
+    if ent and (now - ent.get("checked_at", 0)) < _SOFT404_TTL:
+        return bool(ent.get("answers_for_any"))
+
+    ctrl_url = re.sub(re.escape(handle), _CONTROL_HANDLE, url, flags=re.I)
+    # Visible text, not raw bytes: fetch_page_text strips scripts and markup, so
+    # the comparison works regardless of how much boilerplate the page carries,
+    # and is not defeated by a page too large to read in full.
+    r_title, r_body = fetch_page_text(url)
+    c_title, c_body = fetch_page_text(ctrl_url)
+
+    verdict, reason = False, "inconclusive"
+    if not (r_title or r_body):
+        reason = "the profile page itself could not be read"
+    elif not (c_title or c_body):
+        # A 404, or nothing at all, for a handle that cannot exist: the site
+        # distinguishes real handles from invented ones.
+        reason = "a handle that cannot exist returns nothing"
+    else:
+        _ph = "@@handle@@"
+        rn = (re.sub(re.escape(handle), _ph, r_title + " " + r_body[:4000],
+                     flags=re.I)).strip()
+        cn = (re.sub(re.escape(_CONTROL_HANDLE), _ph, c_title + " " + c_body[:4000],
+                     flags=re.I)).strip()
+        if rn == cn:
+            verdict = True
+            reason = ("a handle that cannot exist returns the same page "
+                      "(identical title and text)")
+        else:
+            reason = "a handle that cannot exist returns a different page"
+
+    cache[host] = {"answers_for_any": verdict, "checked_at": now, "reason": reason}
+    _soft404_cache_write(cache)
+    return verdict
+
+
 def _name_confirms(contact_name, profile_fullname):
     """Strict 'this profile's own name IS the contact's name'.
 
@@ -899,6 +1020,19 @@ def expand_known_urls(name, known_urls):
         # Any other recognised platform is a profile page, not a website.
 
         shared, fam = _name_agreement(name, prof.get("fullname", ""))
+        # A site that serves the same page for a handle nobody owns cannot
+        # attribute an account to this contact or to anyone else. Separately, a
+        # well-behaved site may still report that this particular account is gone.
+        if _is_maigret and site_answers_for_any_handle(prof.get("url", ""),
+                                                       prof.get("handle", "")):
+            prof["site_answers_for_any_handle"] = True
+            prof.setdefault("name_shared_tokens_raw", shared)
+            prof.setdefault("family_present_raw", fam)
+            prof["corroboration_note"] = (
+                "the site returns an identical page for a handle that cannot "
+                "exist, so finding this handle there is not evidence of an account")
+            shared, fam = 0, False
+
         prof["name_shared_tokens"] = shared
         prof["family_present"] = fam
         # This disagreement used to be measured here and then never consulted.
@@ -1376,12 +1510,19 @@ def research_person(name, email="", employer="", handles=None, phone="",
             hay = (title + " " + body)
             shared, fam = _name_agreement(name, hay)
             org_ok = bool(org) and org.strip().lower() in hay.lower()
-            if shared < 2 and not (fam and org_ok):
+            # Token overlap across a whole page promoted pages that merely contain
+            # a <Given> and a <Family> belonging to two different people. Require
+            # the name to appear as a name.
+            named = _name_phrase_in_text(name, hay, name_given, name_family)
+            if not named and not (fam and org_ok):
                 continue   # page does not name the contact -> stays unverified
             cand["status"] = "verified_candidate"
             cand["verified"] = True
-            cand["verified_by"] = ("full name on page" if shared >= 2
+            cand["verified_by"] = ("full name on page" if named
                                    else "family name + employer on page")
+            # Only an adjacency match counts as a full-name corroboration, since
+            # that is what the level calculation reads.
+            shared = 2 if named else min(shared, 1)
             parsed = parse_profile_url(cand["url"])
             result["profiles"].append({
                 "site": (parsed["platform"] if parsed else "Website"),
@@ -1436,6 +1577,15 @@ def research_person(name, email="", employer="", handles=None, phone="",
                                         (" and employer" if org else ""))
             result["identity"]["level"] = level
             result["identity"]["reason"] = reason
+            # corroborating_sites was left at its pre-search value, so a caller
+            # could see level "high" next to an empty evidence list.
+            _search_sites = [p.get("site") or "Website" for p in _sp
+                             if p.get("name_shared_tokens", 0) >= 2
+                             or (p.get("family_present") and p.get("org_present"))]
+            if _search_sites:
+                result["identity"]["corroborating_sites"] = (
+                    list(result["identity"].get("corroborating_sites") or [])
+                    + _search_sites)
         if result["search_candidates"]:
             result["identity"]["reason"] = (
                 f"{reason}; {len(result['search_candidates'])} unverified "
