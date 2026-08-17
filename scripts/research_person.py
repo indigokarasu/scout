@@ -765,7 +765,11 @@ def _name_agreement(contact_name, profile_fullname):
     """(shared_token_count, family_present) between contact and a profile name."""
     if not profile_fullname:
         return 0, False
-    ratio, shared = token_overlap_ratio(contact_name, profile_fullname)
+    # keep_initials so a contact whose given name is initials can match a profile
+    # that displays exactly their name; the family-name requirement at the
+    # corroboration site is what keeps that safe.
+    ratio, shared = token_overlap_ratio(contact_name, profile_fullname,
+                                        keep_initials=True)
     fam = (normalize_name(contact_name).split() or [""])[-1]
     fam_present = bool(fam) and fam in normalize_name(profile_fullname).split()
     return shared, fam_present
@@ -1264,7 +1268,11 @@ def research_person(name, email="", employer="", handles=None, phone="",
             else:
                 curated_anchors.append(prof)
 
-        if shared >= 2:
+        # The family name must be one of the shared tokens. Without that, a given
+        # name plus a middle initial agreeing was enough to count as a full-name
+        # match even when the surnames differed — two shared tokens, two different
+        # people.
+        if shared >= 2 and fam:
             corroborating.append(prof)
             fnc += 1
         elif fam:
