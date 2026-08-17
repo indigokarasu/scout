@@ -648,7 +648,7 @@ def gravatar_profile(email, timeout=10):
 def email_domain_site(email):
     """A personal-domain email is a website hiding in plain sight.
 
-    'anna@annastillwell.com' -> https://annastillwell.com. Returns None for
+    'ana@anaperez.example' -> https://anaperez.example. Returns None for
     consumer/webmail and obvious corporate shared domains, where the domain
     says nothing about which individual owns the mailbox.
     """
@@ -1167,7 +1167,7 @@ def research_person(name, email="", employer="", handles=None, phone="",
             result["identity"]["reason"] = "gravatar profile registered to the contact's email"
 
     # ---- Email-domain probe: a non-freemail address often IS the person's
-    # website ('anna@annastillwell.com' -> annastillwell.com). The local part
+    # website ('ana@anaperez.example' -> anaperez.example). The local part
     # can be too short to be a handle while the DOMAIN identifies them exactly,
     # so this runs before falling back to search.
     if level not in ("high", "med"):

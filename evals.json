@@ -4,7 +4,7 @@
   "description": "Evaluation test cases for ocas-scout",
   "evals": [
     {
-      "input": "Research the CEO of Anthropic",
+      "input": "Research the CEO of Wikimedia Foundation",
       "expected_output": "Returns a provenance-backed brief with cited sources about Dario Amodei",
       "description": "Person research"
     },
