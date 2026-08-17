@@ -74,7 +74,8 @@ _PERSONAL_SUFFIXES = {
 }
 
 
-def name_tokens(name: str | None, min_len: int = 2) -> set[str]:
+def name_tokens(name: str | None, min_len: int = 2,
+                keep_initials: bool = False) -> set[str]:
     """Token set used for overlap matching.
 
     min_len is 2 so that real short surnames participate. It was 4, which
@@ -85,9 +86,18 @@ def name_tokens(name: str | None, min_len: int = 2) -> set[str]:
     fell below the corroboration threshold, so those contacts were
     systematically under-identified.
 
-    Single characters (initials) are still excluded. Particles and honorifics
-    are excluded by MEANING rather than by length, and a particle in final
-    position is kept because there it is the family name (Ravi Das, Jenny Le).
+    Single characters (initials) are excluded by default, because a middle initial
+    is noise when comparing two spelled-out names. Callers that compare a contact
+    against a profile's displayed name pass keep_initials=True: without it a name
+    whose GIVEN part is initials tokenises to the surname alone, so
+    the name cannot even match itself and such contacts are permanently capped at
+    family-name agreement. Whoever opts in must also require the family name to be
+    among the shared tokens, or "<Given> A. <Family1>" and "<Given> A. <Family2>"
+    share two tokens while naming different people.
+
+    Particles and honorifics are excluded by MEANING rather than by length, and a
+    particle in final position is kept because there it is the family name
+    (Ravi Das, Jenny Le).
     """
     base = normalize_name(name)
     if not base:
@@ -96,18 +106,31 @@ def name_tokens(name: str | None, min_len: int = 2) -> set[str]:
     last = len(parts) - 1
     out = set()
     for i, t in enumerate(parts):
-        if len(t) < min_len or t in _PERSONAL_SUFFIXES:
+        if t in _PERSONAL_SUFFIXES:
             continue
-        if t in _NAME_PARTICLES and i != last:
+        # A single character is an initial: dropped by default, kept for identity
+        # corroboration so a name whose given part is initials can match itself.
+        if len(t) < min_len and not (keep_initials and len(t) == 1
+                                     and t.isalpha()):
+            continue
+        # Dropped only in a middle position. In final position it is the family
+        # name (Ravi Das, Jenny Le); in first position it is either a given name in
+        # its own right ("Ben") or part of the surname, and either way it is signal.
+        if t in _NAME_PARTICLES and i != last and i != 0:
             continue
         out.add(t)
     return out
 
 
-def token_overlap_ratio(left: str | None, right: str | None) -> tuple[float, int]:
-    """Return (jaccard-like ratio, shared token count) over min-len tokens."""
-    a = name_tokens(left)
-    b = name_tokens(right)
+def token_overlap_ratio(left: str | None, right: str | None,
+                        keep_initials: bool = False) -> tuple[float, int]:
+    """Return (jaccard-like ratio, shared token count) over min-len tokens.
+
+    keep_initials is forwarded to name_tokens; see the note there on why identity
+    corroboration needs it and what else it requires.
+    """
+    a = name_tokens(left, keep_initials=keep_initials)
+    b = name_tokens(right, keep_initials=keep_initials)
     if not a or not b:
         return 0.0, 0
     shared = a & b
