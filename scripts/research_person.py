@@ -793,6 +793,12 @@ def _handle_is_bare_name_part(handle, name, name_given="", name_family=""):
     if (g and h == g) or (f and h == f):
         return True
 
+    # The given name spelled out makes the handle the whole name, however short
+    # that name is — a two-letter given name plus a surname is both parts, not an
+    # initial plus a surname.
+    if len(g) >= 2 and g in h and h != g:
+        return False
+
     for part in (f, g):
         if len(part) < 3 or part not in h:
             continue
@@ -804,7 +810,11 @@ def _handle_is_bare_name_part(handle, name, name_given="", name_family=""):
             continue
         # A single leading letter is an initial: it abbreviates the other name
         # into one of 26 values and identifies nobody (<initial><surname>).
-        if len(prefix) == 1 and prefix.isalpha():
+        # One or two leading letters are initials: they abbreviate the other
+        # name into a handful of values and identify nobody. Two letters matter as
+        # much as one — the "<first two letters><surname>" address shape is common
+        # and was measured colliding with a stranger sharing the surname.
+        if 1 <= len(prefix) <= 2 and prefix.isalpha():
             return True
         # Anything longer in front is another name or word, which makes the
         # handle specific: <given><surname> carries the whole name.
