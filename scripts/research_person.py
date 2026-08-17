@@ -1030,18 +1030,6 @@ def expand_known_urls(name, known_urls):
         # Any other recognised platform is a profile page, not a website.
 
         shared, fam = _name_agreement(name, prof.get("fullname", ""))
-        # A site that serves the same page for a handle nobody owns cannot
-        # attribute an account to this contact or to anyone else. Separately, a
-        # well-behaved site may still report that this particular account is gone.
-        if _is_maigret and site_answers_for_any_handle(prof.get("url", ""),
-                                                       prof.get("handle", "")):
-            prof["site_answers_for_any_handle"] = True
-            prof.setdefault("name_shared_tokens_raw", shared)
-            prof.setdefault("family_present_raw", fam)
-            prof["corroboration_note"] = (
-                "the site returns an identical page for a handle that cannot "
-                "exist, so finding this handle there is not evidence of an account")
-            shared, fam = 0, False
 
         prof["name_shared_tokens"] = shared
         prof["family_present"] = fam
@@ -1250,6 +1238,19 @@ def research_person(name, email="", employer="", handles=None, phone="",
                 "handle carries no more signal than the surname, so family-name "
                 "agreement is not independent evidence; only a profile naming "
                 "the contact in full would count")
+            shared, fam = 0, False
+
+        # A site that serves the same page for a handle nobody owns cannot
+        # attribute an account to this contact or to anyone else. Separately, a
+        # well-behaved site may still report that this particular account is gone.
+        if _is_maigret and site_answers_for_any_handle(prof.get("url", ""),
+                                                       prof.get("handle", "")):
+            prof["site_answers_for_any_handle"] = True
+            prof.setdefault("name_shared_tokens_raw", shared)
+            prof.setdefault("family_present_raw", fam)
+            prof["corroboration_note"] = (
+                "the site returns an identical page for a handle that cannot "
+                "exist, so finding this handle there is not evidence of an account")
             shared, fam = 0, False
 
         prof["name_shared_tokens"] = shared
