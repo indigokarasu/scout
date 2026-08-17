@@ -66,6 +66,7 @@ GitHub API call, the optional page-title fetch, and the local SearXNG query.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -92,7 +93,8 @@ SEARXNG_URL = os.environ.get("SCOUT_SEARXNG_URL", "http://127.0.0.1:8888/search"
 
 # Hard caps so a fallback search cannot multiply into ~990 outbound sweeps.
 MAX_SEARCH_QUERIES = 3
-MAX_SEARCH_CANDIDATES = 8
+MAX_SEARCH_CANDIDATES = 12
+MAX_SEARCH_VERIFY = 6   # candidates actually fetched and name-checked
 MAX_MAIGRET_HANDLES = 3
 
 GENERIC_EMAIL_LOCALS = {
@@ -489,6 +491,187 @@ def github_api_fields(handle, timeout=8):
     return out
 
 
+
+def fetch_page_text(url, timeout=10, max_bytes=300_000):
+    """Title + visible text of a page, for NAME CORROBORATION ONLY.
+
+    Deliberately not an extractor: the text is used to answer "does this page
+    name the contact?" and never to mine field values, so there is nothing for
+    a regex to mis-attribute into an employer.
+    """
+    try:
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read(max_bytes).decode("utf-8", errors="ignore")
+    except Exception:  # noqa: BLE001
+        return "", ""
+    m = _TITLE_RE.search(raw)
+    title = ""
+    if m:
+        title = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", m.group(1))).strip()[:200]
+    body = re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>", " ", raw)
+    body = re.sub(r"<[^>]+>", " ", body)
+    body = re.sub(r"\s+", " ", body).strip()
+    return title, body[:20000]
+
+
+
+
+# Roles that make a <title> tail a plausible job title rather than a tagline.
+_ROLE_WORDS = (
+    "leader", "director", "manager", "engineer", "designer", "founder",
+    "co-founder", "ceo", "cto", "coo", "cfo", "head", "principal", "lead",
+    "architect", "developer", "analyst", "consultant", "writer", "editor",
+    "producer", "researcher", "scientist", "professor", "advisor", "strategist",
+    "president", "officer", "partner", "owner", "specialist", "coordinator",
+    "photographer", "illustrator", "artist", "therapist", "attorney", "counsel",
+)
+_TITLE_SEP = re.compile("\\s+[|\u2013\u2014\u00b7:]+\\s+|\\s+-\\s+")
+_HREF_RE = re.compile("href\\s*=\\s*[\"\']([^\"\']+)[\"\']", re.I)
+_DESC_RE = re.compile("(?is)<meta[^>]+name=[\"\']description[\"\'][^>]+content=[\"\']([^\"\']+)")
+_OGTITLE_RE = re.compile("(?is)<meta[^>]+property=[\"\']og:title[\"\'][^>]+content=[\"\']([^\"\']+)")
+# Template placeholders, never real addresses.
+_PLACEHOLDER_EMAILS = {"user@domain.com", "you@example.com", "name@email.com",
+                       "email@example.com", "your@email.com", "info@domain.com"}
+
+
+def mine_personal_site(url, name, timeout=12, max_bytes=400_000):
+    """Harvest a contact's OWN site, once it is confirmed to name them.
+
+    A link the subject publishes on their own site is an assertion BY them, so
+    profile links found here are accepted without a separate name match —
+    unlike a link found on a third party's page. That is why this runs only
+    after the site has corroborated the contact's name.
+
+    The <title> tail is read as a job title only when it actually looks like
+    one; prose is otherwise left alone, because mining arbitrary text for an
+    employer is what previously produced nonsense values.
+    """
+    out = {"links": [], "occupation": None, "tagline": None, "emails": []}
+    try:
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            raw = r.read(max_bytes).decode("utf-8", errors="ignore")
+    except Exception:  # noqa: BLE001
+        return out
+
+    seen = set()
+    site_host = _host_of(url)
+    for m in _HREF_RE.finditer(raw):
+        u = m.group(1).split("#")[0].split("?")[0].strip()
+        if not u.startswith("http") or _host_of(u) == site_host:
+            continue
+        parsed = parse_profile_url(u)
+        if not parsed or not parsed.get("handle"):
+            continue
+        key = (parsed["platform"], (parsed["handle"] or "").lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        out["links"].append(parsed)
+
+    tm = _TITLE_RE.search(raw)
+    title = ""
+    if tm:
+        title = re.sub("\\s+", " ", re.sub("<[^>]+>", " ", tm.group(1))).strip()
+    if not title:
+        om = _OGTITLE_RE.search(raw)
+        if om:
+            title = re.sub("\\s+", " ", om.group(1)).strip()
+    if title:
+        name_toks = set(normalize_name(name).split())
+        for part in [x.strip() for x in _TITLE_SEP.split(title) if x.strip()]:
+            if set(normalize_name(part).split()) & name_toks:
+                continue                        # this fragment is the name
+            low = part.lower()
+            if any(w in low for w in _ROLE_WORDS) and 3 < len(part) <= 70:
+                out["occupation"] = part
+                break
+
+    dm = _DESC_RE.search(raw)
+    if dm:
+        tag = re.sub("\\s+", " ", dm.group(1)).strip()
+        if 3 < len(tag) <= 200:
+            out["tagline"] = tag
+
+    for em in set(re.findall("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}", raw)):
+        low = em.lower()
+        if low in _PLACEHOLDER_EMAILS:
+            continue
+        if low.endswith((".png", ".jpg", ".svg", ".css", ".js")):
+            continue
+        if low.split("@")[1] in ("example.com", "domain.com", "email.com"):
+            continue
+        out["emails"].append(low)
+    return out
+
+
+def gravatar_profile(email, timeout=10):
+    """Gravatar profile for an email address, or None.
+
+    Gravatar is keyed on the md5 of the address itself, so a hit is bound to
+    THIS email rather than inferred from a name — stronger provenance than any
+    name match. The displayName is often just a handle, so it is reported but
+    never trusted as the person's real name.
+    """
+    if not email or "@" not in email:
+        return None
+    h = hashlib.md5(email.strip().lower().encode()).hexdigest()
+    try:
+        req = urllib.request.Request(
+            "https://www.gravatar.com/%s.json" % h,
+            headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                                   "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            d = json.loads(r.read())
+    except Exception:  # noqa: BLE001
+        return None
+    entry = (d.get("entry") or [{}])[0]
+    if not entry:
+        return None
+    name = (entry.get("displayName")
+            or (entry.get("name") or {}).get("formatted") or "").strip()
+    return {
+        "display_name": name,
+        "location": (entry.get("currentLocation") or "").strip(),
+        "bio": (entry.get("aboutMe") or "").strip(),
+        "accounts": [a.get("url") for a in (entry.get("accounts") or []) if a.get("url")],
+        "urls": [u.get("value") for u in (entry.get("urls") or []) if u.get("value")],
+        "profile_url": entry.get("profileUrl") or "",
+    }
+
+
+def email_domain_site(email):
+    """A personal-domain email is a website hiding in plain sight.
+
+    'anna@annastillwell.com' -> https://annastillwell.com. Returns None for
+    consumer/webmail and obvious corporate shared domains, where the domain
+    says nothing about which individual owns the mailbox.
+    """
+    if not email or "@" not in email:
+        return None
+    dom = email.split("@", 1)[1].strip().lower().rstrip(".")
+    if not dom or "." not in dom:
+        return None
+    if dom in FREEMAIL_DOMAINS:
+        return None
+    return "https://" + dom
+
+
+FREEMAIL_DOMAINS = {
+    "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.uk", "hotmail.com",
+    "outlook.com", "live.com", "msn.com", "aol.com", "icloud.com", "me.com",
+    "mac.com", "proton.me", "protonmail.com", "gmx.com", "mail.com",
+    "fastmail.com", "zoho.com", "yandex.com", "qq.com", "163.com", "126.com",
+    "comcast.net", "sbcglobal.net", "verizon.net", "att.net", "cox.net",
+    "aim.com", "earthlink.net", "juno.com", "mailinator.com", "example.com",
+}
+
+
 def fetch_page_title(url, timeout=10, max_bytes=200_000):
     """Cheapest possible read of a personal site: just the <title>. '' on any
     failure. Deliberately NOT a scraper — no body text is extracted, so there
@@ -550,7 +733,12 @@ def build_search_queries(name, name_given="", name_family="", org="",
     occupation = (occupation or "").strip()
     city_head = (location_city or "").split(",")[0].strip()
 
-    queries = []
+    # The bare quoted name goes FIRST, always. Qualifying a distinctive full
+    # name with an employer measurably degraded results on the available
+    # engines: the qualified query returned only unrelated popular pages while
+    # the bare name returned the person's actual profiles. Qualified variants
+    # still run afterwards to help common names.
+    queries = [f'"{name}"']
     if org:
         queries.append(f'site:linkedin.com/in "{name}" {org}')
         queries.append(f'"{name}" {org}')
@@ -934,6 +1122,129 @@ def research_person(name, email="", employer="", handles=None, phone="",
     # ---- Name+org search fallback: ONLY when nothing corroborated, and never
     # allowed to raise the identity level. Output is candidate evidence for a
     # human/LLM verification pass, per the 2026-08-14 fail-closed rebuild.
+    # ---- Gravatar: the email's own profile. Keyed on md5(email), so a hit
+    # belongs to this address by construction. Location and linked accounts are
+    # taken; displayName is NOT written as the person's name because it is
+    # frequently just a handle.
+    grav = gravatar_profile(email) if email else None
+    if grav and (grav["location"] or grav["accounts"] or grav["urls"] or grav["bio"]):
+        result["profiles"].append({
+            "site": "Gravatar", "handle": "", "url": grav["profile_url"] or "",
+            "fullname": grav["display_name"], "location": grav["location"],
+            "bio": grav["bio"], "blog_url": (grav["urls"] or [""])[0],
+            "provenance": "gravatar", "curated": False, "kind": "profile",
+            "handle_origin": "email_hash",
+        })
+        result["findings"].append({
+            "finding_id": "GR001",
+            "claim": ("Gravatar profile registered to %s%s" % (
+                email, (" — location: " + grav["location"]) if grav["location"] else "")),
+            "confidence": "high",
+            "source_refs": [{"url": grav["profile_url"] or "https://gravatar.com",
+                             "retrieved_at": _now(),
+                             "quote": (grav["bio"] or grav["location"] or "")[:300]}],
+        })
+        if grav["location"]:
+            result["enrichment"].setdefault("location_city", grav["location"])
+            result["enrichment"].setdefault("location_city_source", "gravatar")
+            result["enrichment"].setdefault("location_city_confidence", 0.8)
+        for u in (grav["accounts"] + grav["urls"]):
+            parsed = parse_profile_url(u)
+            if parsed and not any((p.get("url") or "").rstrip("/") == u.rstrip("/")
+                                  for p in result["profiles"]):
+                result["profiles"].append({
+                    "site": parsed["platform"], "handle": parsed["handle"],
+                    "url": u, "fullname": "", "location": "", "bio": "",
+                    "blog_url": "", "provenance": "gravatar_linked",
+                    "curated": False, "kind": parsed["kind"],
+                    "handle_origin": "gravatar",
+                })
+        # An email-anchored profile is real corroboration of the ADDRESS, which
+        # is what the contact record actually asserts.
+        if level == "none":
+            level = "med"
+            result["identity"]["level"] = level
+            result["identity"]["reason"] = "gravatar profile registered to the contact's email"
+
+    # ---- Email-domain probe: a non-freemail address often IS the person's
+    # website ('anna@annastillwell.com' -> annastillwell.com). The local part
+    # can be too short to be a handle while the DOMAIN identifies them exactly,
+    # so this runs before falling back to search.
+    if level not in ("high", "med"):
+        site = email_domain_site(email)
+        if site and site.rstrip("/").lower() not in {
+                (p.get("url") or "").rstrip("/").lower() for p in result["profiles"]}:
+            title, body = fetch_page_text(site)
+            if title or body:
+                shared, fam = _name_agreement(name, title + " " + body)
+                if shared >= 2:
+                    result["profiles"].append({
+                        "site": "Website", "handle": "", "url": site,
+                        "fullname": title[:120], "location": "", "bio": "",
+                        "blog_url": site, "provenance": "email_domain",
+                        "curated": False, "kind": "website",
+                        "handle_origin": "email_domain",
+                        "name_shared_tokens": shared, "family_present": fam,
+                    })
+                    result["findings"].append({
+                        "finding_id": "ED001",
+                        "claim": f"Email domain resolves to a site naming the contact: {title or site}",
+                        "confidence": "high",
+                        "source_refs": [{"url": site, "retrieved_at": _now(),
+                                         "quote": title[:300]}],
+                    })
+                    result["enrichment"].setdefault("website", site)
+                    result["enrichment"].setdefault("website_source", site)
+                    result["enrichment"].setdefault("website_confidence", 0.9)
+
+                    # The site is confirmed to be theirs, so mine it: the links
+                    # a person publishes about themselves are the highest-grade
+                    # signal available, better than anything inferred.
+                    mined = mine_personal_site(site, name)
+                    for parsed in mined["links"]:
+                        if any((p.get("url") or "").rstrip("/") ==
+                               parsed["url"].rstrip("/") for p in result["profiles"]):
+                            continue
+                        result["profiles"].append({
+                            "site": parsed["platform"], "handle": parsed["handle"],
+                            "url": parsed["url"], "fullname": "", "location": "",
+                            "bio": "", "blog_url": "",
+                            "provenance": "self_published",
+                            "curated": False, "kind": parsed["kind"],
+                            "handle_origin": "personal_site",
+                        })
+                    if mined["links"]:
+                        result["findings"].append({
+                            "finding_id": "PS001",
+                            "claim": ("Contact's own site links %d profile(s): %s"
+                                      % (len(mined["links"]),
+                                         ", ".join(p["platform"] for p in mined["links"]))),
+                            "confidence": "high",
+                            "source_refs": [{"url": site, "retrieved_at": _now(),
+                                             "quote": title[:300]}],
+                        })
+                    if mined["occupation"]:
+                        result["enrichment"].setdefault("occupation", mined["occupation"])
+                        result["enrichment"].setdefault("occupation_source", site)
+                        result["enrichment"].setdefault("occupation_confidence", 0.85)
+                    if mined["tagline"]:
+                        result["enrichment"].setdefault("bio_summary", mined["tagline"])
+                        result["enrichment"].setdefault("bio_summary_source", site)
+                        result["enrichment"].setdefault("bio_summary_confidence", 0.8)
+                    for em in mined["emails"][:2]:
+                        if em != (email or "").lower():
+                            result["findings"].append({
+                                "finding_id": "PS002",
+                                "claim": "Additional email published on own site: %s" % em,
+                                "confidence": "med",
+                                "source_refs": [{"url": site, "retrieved_at": _now(),
+                                                 "quote": em}],
+                            })
+                    level = "med" if level == "none" else level
+                    result["identity"]["level"] = level
+                    result["identity"]["reason"] = (
+                        "email domain is a personal site naming the contact")
+
     if enable_search and level not in ("high", "med"):
         queries = build_search_queries(name, name_given, name_family, org,
                                        occupation, location_city)[:max_search_queries]
@@ -946,7 +1257,7 @@ def research_person(name, email="", employer="", handles=None, phone="",
                    "input_type": "query", "input_value": q,
                    "status": "success", "findings_count": 0, "error": None}
             try:
-                hits = searxng_search(q, limit=5, searxng_url=searxng_url)
+                hits = searxng_search(q, limit=10, searxng_url=searxng_url)
             except Exception as e:  # noqa: BLE001
                 hits = []
                 rec["status"] = "error"
@@ -973,16 +1284,80 @@ def research_person(name, email="", employer="", handles=None, phone="",
             rec["findings_count"] = len(hits)
             result["tools"].append(rec)
 
-        for cand in result["search_candidates"]:
-            result["findings"].append({
-                "finding_id": cand["candidate_id"],
-                "claim": ("UNVERIFIED CANDIDATE (web search, name not "
-                          f"corroborated): {cand['title'] or cand['url']}"),
-                "confidence": "low",
-                "unverified": True,
-                "source_refs": [{"url": cand["url"], "retrieved_at": _now(),
-                                 "quote": cand["snippet"]}],
+        # VERIFY the candidates instead of discarding them. Collecting URLs and
+        # never opening them is why contacts with no email but a known employer
+        # ("someone at Netflix") failed: the search found them and the result
+        # was thrown away. Fetching is cheap and the bar is unchanged — a
+        # candidate is promoted only if the PAGE ITSELF names the contact, the
+        # same corroboration standard applied to every other profile.
+        verified_n = 0
+        for cand in result["search_candidates"][:MAX_SEARCH_VERIFY]:
+            title, body = fetch_page_text(cand["url"])
+            if not (title or body):
+                continue
+            hay = (title + " " + body)
+            shared, fam = _name_agreement(name, hay)
+            org_ok = bool(org) and org.strip().lower() in hay.lower()
+            if shared < 2 and not (fam and org_ok):
+                continue   # page does not name the contact -> stays unverified
+            cand["status"] = "verified_candidate"
+            cand["verified"] = True
+            cand["verified_by"] = ("full name on page" if shared >= 2
+                                   else "family name + employer on page")
+            parsed = parse_profile_url(cand["url"])
+            result["profiles"].append({
+                "site": (parsed["platform"] if parsed else "Website"),
+                "handle": (parsed["handle"] if parsed else ""),
+                "url": cand["url"],
+                "fullname": title[:120],
+                "location": "",
+                "bio": "",
+                "blog_url": "",
+                "provenance": "name_search",
+                "curated": False,
+                "kind": (parsed["kind"] if parsed else "website"),
+                "handle_origin": "search",
+                "name_shared_tokens": shared,
+                "family_present": fam,
+                "org_present": org_ok,
             })
+            verified_n += 1
+
+        for cand in result["search_candidates"]:
+            if cand.get("verified"):
+                result["findings"].append({
+                    "finding_id": cand["candidate_id"],
+                    "claim": (f"Search result names the contact ({cand['verified_by']}): "
+                              f"{cand['title'] or cand['url']}"),
+                    "confidence": "med",
+                    "source_refs": [{"url": cand["url"], "retrieved_at": _now(),
+                                     "quote": (cand["title"] or cand["snippet"])[:300]}],
+                })
+            else:
+                result["findings"].append({
+                    "finding_id": cand["candidate_id"],
+                    "claim": ("UNVERIFIED CANDIDATE (web search, name not "
+                              f"corroborated): {cand['title'] or cand['url']}"),
+                    "confidence": "low",
+                    "unverified": True,
+                    "source_refs": [{"url": cand["url"], "retrieved_at": _now(),
+                                     "quote": cand["snippet"]}],
+                })
+
+        # Re-derive identity now that search may have produced corroboration.
+        if verified_n:
+            _sp = [p for p in result["profiles"]
+                   if p.get("provenance") == "name_search" and p.get("verified") is not False]
+            _full = sum(1 for p in _sp if p.get("name_shared_tokens", 0) >= 2)
+            if _full >= 2:
+                level, reason = "high", f"{_full} search result(s) name the contact"
+            elif _full == 1 or any(p.get("family_present") and p.get("org_present")
+                                   for p in _sp):
+                level, reason = "med", (f"{verified_n} search result(s) corroborate "
+                                        "the contact by name" +
+                                        (" and employer" if org else ""))
+            result["identity"]["level"] = level
+            result["identity"]["reason"] = reason
         if result["search_candidates"]:
             result["identity"]["reason"] = (
                 f"{reason}; {len(result['search_candidates'])} unverified "
@@ -1046,7 +1421,11 @@ def research_person(name, email="", employer="", handles=None, phone="",
         if social:
             enr["social_profiles"] = social
             enr["social_profiles_confidence"] = conf
-        result["enrichment"] = enr
+        # MERGE, never replace: the gravatar and email-domain probes above
+        # already recorded findings (location, website) that this block does
+        # not re-derive. Assigning the dict outright silently dropped them.
+        for _k, _v in enr.items():
+            result["enrichment"][_k] = _v
 
     return result
 
