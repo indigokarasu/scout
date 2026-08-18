@@ -55,9 +55,17 @@ def normalize_aggressive(name: str | None) -> str:
 
 # Nobiliary particles and connectives, shared by unrelated people ("van Dijk"
 # / "van Gogh", "de Silva" / "de Souza"), so they must not count as agreement.
-# Dropped ONLY in non-final position: several are also real surnames on their
-# own — Das (Indian), Le (Vietnamese), Ben, Al, Santa — and a trailing token is
-# the family name, which is the single most identifying part of a name.
+# Dropped ONLY in a MIDDLE position, because several are ordinary names in their
+# own right and position is the only thing that tells the two senses apart:
+#   final   — the family name, the most identifying part of a name
+#             (Das, Le, Santa)
+#   first   — a given name (Ben, Al, Van) or the head of a surname. Three
+#             contacts named Ben tokenised to their surname alone until this
+#             case was added, so they could not match even themselves.
+#   middle  — a connective joining the two ("Jan van Dijk"), which is the case
+#             this set exists for.
+# The same applies to the initials E and Y, which are connectives in Portuguese
+# and Spanish but a first initial when they lead a name.
 _NAME_PARTICLES = {
     "VAN", "VON", "DER", "DEN", "DE", "DEL", "DELLA", "DI", "DA", "DOS", "DAS",
     "DU", "LA", "LE", "LES", "EL", "AL", "BIN", "IBN", "BEN", "AP", "MAC", "MC",
