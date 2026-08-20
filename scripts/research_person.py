@@ -85,7 +85,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _normalize import normalize_name, token_overlap_ratio  # noqa: E402
+from _normalize import normalize_name, token_overlap_ratio, fold_accents  # noqa: E402
 
 OSINT_VENV = os.environ.get("SCOUT_OSINT_VENV", "/root/.hermes/tools/osint-venv")
 MAIGRET_BIN = f"{OSINT_VENV}/bin/maigret"
@@ -341,6 +341,12 @@ def email_handle_variants(email):
 
 
 def _split_name(name, name_given="", name_family=""):
+    # Fold accents before any stripping. [^A-Za-z0-9] treats an accented letter as
+    # punctuation and deletes it, so an accented given name lost the letter and
+    # found in real text. Folding first keeps the base letter: oisin.
+    name = fold_accents(name)
+    name_given = fold_accents(name_given)
+    name_family = fold_accents(name_family)
     given = (name_given or "").strip()
     family = (name_family or "").strip()
     if not (given and family):
@@ -786,12 +792,12 @@ def _handle_is_bare_name_part(handle, name, name_given="", name_family=""):
     evidence, which is the discriminator this pipeline relies on
     (a handle combining both name parts, or one sharing no name token at all).
     """
-    h = re.sub(r"[^a-z0-9]", "", (handle or "").lower())
+    h = re.sub(r"[^a-z0-9]", "", fold_accents(handle or "").lower())
     if not h:
         return False
     given, family = _split_name(name, name_given, name_family)
-    f = re.sub(r"[^a-z0-9]", "", (family or "").lower())
-    g = re.sub(r"[^a-z0-9]", "", (given or "").lower())
+    f = re.sub(r"[^a-z0-9]", "", fold_accents(family or "").lower())
+    g = re.sub(r"[^a-z0-9]", "", fold_accents(given or "").lower())
 
     # Exactly one name part and nothing else.
     if (g and h == g) or (f and h == f):
@@ -834,11 +840,13 @@ def _name_phrase_in_text(name, text, name_given="", name_family="", max_gap=2):
     sit between the two, and the "<Family>, <Given>" ordering is accepted.
     """
     given, family = _split_name(name, name_given, name_family)
-    g = re.sub(r"[^a-z0-9]", "", (given or "").lower())
-    f = re.sub(r"[^a-z0-9]", "", (family or "").lower())
+    g = re.sub(r"[^a-z0-9]", "", fold_accents(given or "").lower())
+    f = re.sub(r"[^a-z0-9]", "", fold_accents(family or "").lower())
     if not g or not f:
         return False
-    low = (text or "").lower()
+    # Fold the haystack too. Stripping accents from only the name being looked
+    # for removed its accented letter entirely, leaving a string no page contains.
+    low = fold_accents(text or "").lower()
     g_spans = [m.span() for m in re.finditer(r"\b" + re.escape(g) + r"\b", low)]
     f_spans = [m.span() for m in re.finditer(r"\b" + re.escape(f) + r"\b", low)]
     if not g_spans or not f_spans:
