@@ -5,6 +5,7 @@ Used by entity_resolution.py and timing_analysis.py.
 from __future__ import annotations
 
 import re
+import unicodedata
 import sys
 
 _HELP_ARGS = {"--help", "-h"}
@@ -39,7 +40,11 @@ def normalize_name(name: str | None) -> str:
     """Standard normalization: uppercase, strip suffixes, drop punctuation."""
     if not name:
         return ""
-    s = _PUNCT_RE.sub(" ", name.upper())
+    # Fold accents FIRST. _PUNCT_RE treats any non-alphanumeric character as
+    # punctuation, so an accented letter was replaced by a space and the name split
+    # in two, and every downstream consumer saw a mangled string which
+    # cannot occur in real text. 19 contacts carried names this destroyed.
+    s = _PUNCT_RE.sub(" ", fold_accents(name).upper())
     s = _WS_RE.sub(" ", s).strip()
     tokens = [t for t in s.split() if t and t not in _SUFFIX_TOKENS]
     return " ".join(tokens)
@@ -81,6 +86,23 @@ _PERSONAL_SUFFIXES = {
     "MR", "MRS", "MS", "DR", "PROF",
 }
 
+
+def fold_accents(text: str | None) -> str:
+    """Base letters only: 'café' -> 'cafe', 'Straße' -> 'Strasse', 'naïve' -> 'naive'.
+
+    Names were matched by stripping every non-[a-z0-9] character from the name being
+    looked for while leaving the searched text untouched, so an accented name became
+    a string that could not occur at all. Folding BOTH sides is what
+    makes them comparable.
+    """
+    if not text:
+        return ""
+    for a, b in (("æ", "ae"), ("Æ", "AE"), ("ø", "o"), ("Ø", "O"),
+                 ("ß", "ss"), ("đ", "d"), ("Đ", "D"), ("ł", "l"), ("Ł", "L"),
+                 ("ı", "i"), ("œ", "oe"), ("Œ", "OE")):
+        text = text.replace(a, b)
+    decomposed = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in decomposed if not unicodedata.combining(c))
 
 def name_tokens(name: str | None, min_len: int = 2,
                 keep_initials: bool = False) -> set[str]:
