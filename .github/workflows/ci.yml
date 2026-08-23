@@ -46,7 +46,10 @@ jobs:
           python3 -c "
           import yaml, pathlib
           p = pathlib.Path('SKILL.md')
-          data = yaml.safe_load(p.read_text())
+          text = p.read_text()
+          parts = text.split('---')
+          fm = parts[1] if text.startswith('---') else parts[0]
+          data = yaml.safe_load(fm)
           assert 'name' in data, 'Missing name'
           assert 'description' in data, 'Missing description'
           print(f'SKILL.md valid: {data[\"name\"]} v{data.get(\"metadata\",{}).get(\"version\",\"?\")}')
