@@ -87,7 +87,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _normalize import normalize_name, token_overlap_ratio, fold_accents  # noqa: E402
 
-OSINT_VENV = os.environ.get("SCOUT_OSINT_VENV", "/root/.hermes/tools/osint-venv")
+OSINT_VENV = os.environ.get("SCOUT_OSINT_VENV", os.path.join(os.environ.get("AGENT_ROOT", os.path.join(os.path.expanduser("~"), ".hermes")), "tools/osint-venv"))
 MAIGRET_BIN = f"{OSINT_VENV}/bin/maigret"
 HOLEHE_BIN = f"{OSINT_VENV}/bin/holehe"
 
