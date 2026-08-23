@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _http import get_json  # noqa: E402
+from _http import get_json
 
 ENDPOINT = "https://lda.senate.gov/api/v1/filings/"
 COLUMNS = [

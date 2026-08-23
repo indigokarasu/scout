@@ -11,7 +11,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _normalize import name_tokens, normalize_name, token_overlap_ratio
+from _normalize import name_tokens, token_overlap_ratio
 
 
 def _shared(a, b):
@@ -85,10 +85,13 @@ if __name__ == "__main__":
     failed = 0
     for n, f in tests:
         try:
-            f(); print(f"PASS {n}")
+            f()
+            print(f"PASS {n}")
         except AssertionError as e:
-            failed += 1; print(f"FAIL {n}: {e}")
+            failed += 1
+            print(f"FAIL {n}: {e}")
         except Exception as e:
-            failed += 1; print(f"ERROR {n}: {type(e).__name__}: {e}")
+            failed += 1
+            print(f"ERROR {n}: {type(e).__name__}: {e}")
     print(f"\n{len(tests)-failed}/{len(tests)} passed")
     sys.exit(1 if failed else 0)
