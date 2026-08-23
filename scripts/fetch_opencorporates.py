@@ -19,7 +19,7 @@ import urllib.parse
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _http import get, get_json  # noqa: E402
+from _http import get, get_json
 
 API_URL = "https://api.opencorporates.com/v0.4/companies/search"
 HTML_URL = "https://opencorporates.com/companies"

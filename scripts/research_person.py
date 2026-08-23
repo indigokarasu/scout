@@ -85,7 +85,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _normalize import normalize_name, token_overlap_ratio, fold_accents  # noqa: E402
+from _normalize import fold_accents, normalize_name, token_overlap_ratio
 
 OSINT_VENV = os.environ.get("SCOUT_OSINT_VENV", os.path.join(os.environ.get("AGENT_ROOT", os.path.join(os.path.expanduser("~"), ".hermes")), "tools/osint-venv"))
 MAIGRET_BIN = f"{OSINT_VENV}/bin/maigret"
@@ -115,10 +115,10 @@ GENERIC_EMAIL_LOCALS = {
 
 # Enrichment fields we are willing to write from structured sources.
 _PRONOUN_RE = re.compile(
-    r"\b(she/her|he/him|they/them|she/they|he/they|ze/zir|xe/xem)\b", re.I
+    r"\b(she/her|he/him|they/them|she/they|he/they|ze/zir|xe/xem)\b", re.IGNORECASE
 )
 
-_TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.I | re.S)
+_TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
 
 # --------------------------------------------------------------------------
 # Profile-URL parsing
@@ -186,8 +186,7 @@ def _host_of(url):
     except Exception:  # noqa: BLE001
         return ""
     host = host.split("@")[-1].split(":")[0]
-    if host.startswith("www."):
-        host = host[4:]
+    host = host.removeprefix("www.")
     return host
 
 
@@ -246,7 +245,7 @@ def parse_profile_url(url):
     url = (url or "").strip()
     if not url:
         return None
-    if not re.match(r"^https?://", url, re.I):
+    if not re.match(r"^https?://", url, re.IGNORECASE):
         if re.match(r"^[\w.-]+\.[A-Za-z]{2,}(/|$)", url):
             url = "https://" + url
         else:
@@ -300,7 +299,7 @@ def _slug_variants(handle):
     trimmed = re.sub(r"-[0-9a-f]{6,}$", "", h)
     if trimmed != h:
         _add(trimmed)
-    for v in list(out):
+    for v in out:
         _add(re.sub(r"[._\-]", "", v))
     return out
 
@@ -539,7 +538,7 @@ _ROLE_WORDS = (
     "photographer", "illustrator", "artist", "therapist", "attorney", "counsel",
 )
 _TITLE_SEP = re.compile("\\s+[|\u2013\u2014\u00b7:]+\\s+|\\s+-\\s+")
-_HREF_RE = re.compile("href\\s*=\\s*[\"\']([^\"\']+)[\"\']", re.I)
+_HREF_RE = re.compile("href\\s*=\\s*[\"\']([^\"\']+)[\"\']", re.IGNORECASE)
 _DESC_RE = re.compile("(?is)<meta[^>]+name=[\"\']description[\"\'][^>]+content=[\"\']([^\"\']+)")
 _OGTITLE_RE = re.compile("(?is)<meta[^>]+property=[\"\']og:title[\"\'][^>]+content=[\"\']([^\"\']+)")
 # Template placeholders, never real addresses.
@@ -725,7 +724,7 @@ def searxng_search(query, limit=5, searxng_url=None, retries=1, timeout=15):
                  "content": i.get("content", "")}
                 for i in (data.get("results") or [])[:limit]
             ]
-        except urllib.error.HTTPError as e:  # noqa: PERF203
+        except urllib.error.HTTPError as e:
             if getattr(e, "code", 0) == 429:
                 return []
         except Exception:  # noqa: BLE001
@@ -917,7 +916,7 @@ def site_answers_for_any_handle(url, handle):
     if ent and (now - ent.get("checked_at", 0)) < _SOFT404_TTL:
         return bool(ent.get("answers_for_any"))
 
-    ctrl_url = re.sub(re.escape(handle), _CONTROL_HANDLE, url, flags=re.I)
+    ctrl_url = re.sub(re.escape(handle), _CONTROL_HANDLE, url, flags=re.IGNORECASE)
     # Visible text, not raw bytes: fetch_page_text strips scripts and markup, so
     # the comparison works regardless of how much boilerplate the page carries,
     # and is not defeated by a page too large to read in full.
@@ -934,9 +933,9 @@ def site_answers_for_any_handle(url, handle):
     else:
         _ph = "@@handle@@"
         rn = (re.sub(re.escape(handle), _ph, r_title + " " + r_body[:4000],
-                     flags=re.I)).strip()
+                     flags=re.IGNORECASE)).strip()
         cn = (re.sub(re.escape(_CONTROL_HANDLE), _ph, c_title + " " + c_body[:4000],
-                     flags=re.I)).strip()
+                     flags=re.IGNORECASE)).strip()
         if rn == cn:
             verdict = True
             reason = ("a handle that cannot exist returns the same page "

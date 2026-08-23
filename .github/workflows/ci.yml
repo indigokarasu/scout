@@ -38,6 +38,9 @@ jobs:
           python -m py_compile scripts/*.py
           echo "All Python files compile OK"
 
+      - name: Install PyYAML
+        run: pip install pyyaml
+
       - name: Validate SKILL.md YAML
         run: |
           python3 -c "

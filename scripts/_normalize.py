@@ -5,8 +5,8 @@ Used by entity_resolution.py and timing_analysis.py.
 from __future__ import annotations
 
 import re
-import unicodedata
 import sys
+import unicodedata
 
 _HELP_ARGS = {"--help", "-h"}
 if set(sys.argv[1:]) & _HELP_ARGS:
