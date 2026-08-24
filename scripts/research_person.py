@@ -1022,7 +1022,7 @@ def employer_from_email(email, person_name=""):
     dom = email.split("@")[-1].strip()
     if not dom or "." not in dom or any(f in dom for f in _FREE_MAIL_HOSTS):
         return ""
-    labels = [l for l in dom.split(".") if l]
+    labels = [part for part in dom.split(".") if part]
     if labels and labels[0] in ("mail", "smtp", "mx", "email"):
         labels = labels[1:]
     if len(labels) < 2:
@@ -1967,7 +1967,7 @@ def _registrable_label(host):
     """The label a company's identity lives in: 'eightsleep' in eightsleep.test."""
     host = (host or "").strip().lower().rstrip(".")
     host = host.removeprefix("www.")
-    labels = [l for l in host.split(".") if l]
+    labels = [part for part in host.split(".") if part]
     if len(labels) < 2:
         return ""
     if len(labels) >= 3 and len(labels[-1]) == 2 and labels[-2] in (
@@ -1985,7 +1985,7 @@ def registrable_domain(host):
     """
     host = (host or "").strip().lower().rstrip(".")
     host = host.removeprefix("www.")
-    labels = [l for l in host.split(".") if l]
+    labels = [part for part in host.split(".") if part]
     if len(labels) < 2:
         return ""
     if len(labels) >= 3 and len(labels[-1]) == 2 and labels[-2] in (
