@@ -722,17 +722,21 @@ def run_user_scanner(email, timeout=240, concurrency=25):
             pass
 
 
-def fetch_page_text(url, timeout=10, max_bytes=300_000):
-    """Title + visible text of a page, for NAME CORROBORATION ONLY.
+def fetch_page_text(url, timeout=10, max_bytes=300_000, with_raw=False):
+    """Title + visible text of a page, for name corroboration.
 
-    Deliberately not an extractor: the text is used to answer "does this page
-    name the contact?" and never to mine field values, so there is nothing for
-    a regex to mis-attribute into an employer.
+    The default 2-tuple return is unchanged, so every existing caller keeps
+    working. `with_raw=True` additionally hands back the HTML, because the page
+    has already been paid for and the contact fields inside it (a tel: link, a
+    mailto:, a schema.org address, an outbound profile link) are thrown away
+    otherwise. Extraction itself stays in mine_contact_fields, which validates
+    every value — this function still does no attribution of its own.
     """
     raw = fetch_page_html(url, timeout=timeout, max_bytes=max_bytes)
     if not raw:
-        return "", ""
-    return extract_page_text(raw)
+        return ("", "", "") if with_raw else ("", "")
+    title, body = extract_page_text(raw)
+    return (title, body, raw) if with_raw else (title, body)
 
 
 
@@ -755,7 +759,8 @@ _PLACEHOLDER_EMAILS = {"user@domain.com", "you@example.com", "name@email.com",
                        "email@example.com", "your@email.com", "info@domain.com"}
 
 
-def mine_personal_site(url, name, timeout=12, max_bytes=400_000):
+def mine_personal_site(url, name, timeout=12, max_bytes=400_000,
+                       region_hint="US"):
     """Harvest a contact's OWN site, once it is confirmed to name them.
 
     A link the subject publishes on their own site is an assertion BY them, so
@@ -767,7 +772,8 @@ def mine_personal_site(url, name, timeout=12, max_bytes=400_000):
     one; prose is otherwise left alone, because mining arbitrary text for an
     employer is what previously produced nonsense values.
     """
-    out = {"links": [], "occupation": None, "tagline": None, "emails": []}
+    out = {"links": [], "occupation": None, "tagline": None, "emails": [],
+           "phones": [], "cities": [], "linkedin": [], "websites": []}
     try:
         req = urllib.request.Request(url, headers={
             "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
@@ -776,6 +782,22 @@ def mine_personal_site(url, name, timeout=12, max_bytes=400_000):
             raw = r.read(max_bytes).decode("utf-8", errors="ignore")
     except Exception:  # noqa: BLE001
         return out
+
+    # The page is confirmed to be the contact's before this function is called,
+    # so everything mined here is FIRST-PARTY: the contact published it about
+    # themselves. That is the strongest tie available for a LinkedIn URL (see
+    # linkedin_tie) and the only context in which a phone number found on a page
+    # may be attributed to a person at all.
+    try:
+        _t, _b = extract_page_text(raw)
+        _mined = mine_contact_fields(raw, _t + " " + _b, name,
+                                     region_hint=region_hint, page_url=url)
+        out["phones"] = _mined["phones"]
+        out["cities"] = _mined["cities"]
+        out["linkedin"] = _mined["linkedin"]
+        out["websites"] = _mined["websites"]
+    except Exception:  # noqa: BLE001
+        pass
 
     seen = set()
     site_host = _host_of(url)
@@ -1651,12 +1673,33 @@ def _host_is_unfetchable(url):
     return any(h == d or h.endswith("." + d) for d in _UNFETCHABLE_HOSTS)
 
 
+# The five fields this pipeline exists to fill. `missing_fields` names the
+# subset a given contact still lacks, so the query budget is spent on what is
+# actually missing instead of firing one battery at everybody.
+TARGET_FIELDS = ("linkedin", "phone", "site", "email", "city")
+
+
 def build_search_queries(name, name_given="", name_family="", org="",
-                         occupation="", location_city="", email="", phone=""):
-    """Name+org / name+occupation queries, most specific first."""
+                         occupation="", location_city="", email="", phone="",
+                         missing_fields=None):
+    """Queries shaped by WHICH of the five target fields are still missing.
+
+    Passing missing_fields=None keeps the previous behaviour (every query), so
+    existing callers and the CLI are unaffected.
+
+    Query shapes were compared head-to-head on 18 real contacts missing a
+    LinkedIn URL. Discovery differed a lot -- 'site:linkedin.com "<name>"'
+    surfaced a LinkedIn URL for 9 of them against 6 for the others -- but the
+    number that ended up with an accepted URL was 2 either way, because the
+    extra hits were namesakes. '"<name>" <org> linkedin' produced 8 distinct
+    LinkedIn URLs per sample against 20-25 for the site:-scoped shapes, so it
+    goes first: fewer competing namesakes means the collision rule in
+    resolve_linkedin_candidates refuses far less often.
+    """
     name = (name or "").strip()
     if not name:
         return []
+    want = set(missing_fields) if missing_fields is not None else set(TARGET_FIELDS)
     org = (org or "").strip()
     occupation = (occupation or "").strip()
     city_head = (location_city or "").split(",")[0].strip()
@@ -1682,13 +1725,28 @@ def build_search_queries(name, name_given="", name_family="", org="",
         queries.append(f'site:linkedin.com/in "{name}" {_dom_org}')
         queries.append(f'"{name}" {_dom_org}')
     if org:
-        queries.append(f'site:linkedin.com/in "{name}" {org}')
+        if "linkedin" in want:
+            queries.append(f'"{name}" {org} linkedin')
+            queries.append(f'site:linkedin.com/in "{name}" {org}')
         queries.append(f'"{name}" {org}')
     if occupation:
         queries.append(f'"{name}" {occupation}' + (f" {org}" if org else ""))
-    if not org and not occupation:
+    if "linkedin" in want and not org:
         queries.append(f'site:linkedin.com/in "{name}"'
                        + (f" {city_head}" if city_head else ""))
+    # Field-shaped queries. Each one asks for the page type that actually
+    # carries the missing value rather than for the person in general: a
+    # contact/about page for a phone or an address, a portfolio or personal
+    # site for a website. They run only for the fields a contact is missing, so
+    # a contact who only lacks a LinkedIn URL never pays for them.
+    if "phone" in want or "email" in want:
+        queries.append(f'"{name}" {org} contact'.replace("  ", " ").strip()
+                       if org else f'"{name}" contact email')
+    if "site" in want:
+        _q = f'"{name}" {occupation} portfolio' if occupation else f'"{name}" personal website'
+        queries.append(_q)
+    if "city" in want and org:
+        queries.append(f'"{name}" {org} "based in"')
     # Always try the city. It was previously reachable only when the contact had
     # neither an org nor an occupation, yet 82% of the contacts this pipeline
     # fails on have one, and a city is what separates two people of one name.
@@ -1779,6 +1837,748 @@ def _name_phrase_in_text(name, text, name_given="", name_family="", max_gap=2):
     immediately after a match, and it has to be the SAME match this returns.
     """
     return bool(_name_phrase_spans(name, text, name_given, name_family, max_gap))
+
+
+# ── LinkedIn URL verification ────────────────────────────────────────────────
+# A linkedin.com/in/<slug> URL is NOT evidence on its own, and this pipeline has
+# already been burned by treating a name-shaped identifier as identity: a
+# stranger's profiles were attributed to a real contact because a handle
+# resembled their name. Three specific facts drive the rules below.
+#
+#   * Many slugs are opaque — a numeric id, or a name plus a random suffix —
+#     and identify nobody by inspection.
+#   * A slug like "<given><family>" for a common name is shared by thousands of
+#     people. Matching it is the namesake failure, not corroboration.
+#   * LinkedIn answers HTTP 999 to any server-side fetch (it is in
+#     _UNFETCHABLE_HOSTS for exactly that reason), so the page can never be read
+#     to check whose profile it is. There is no "just fetch it and confirm".
+#
+# Therefore a discovered LinkedIn URL is accepted ONLY when something
+# INDEPENDENT of the slug ties it to this contact. See linkedin_tie().
+_LINKEDIN_IN_RE = re.compile(r"linkedin\.com/in/([^/?#\s\"']+)", re.IGNORECASE)
+
+# Public name-frequency data (census-style "most common names" lists). NOTHING
+# here is drawn from any contact record — it exists so that a slug built from a
+# common name is refused as an identifier. A name absent from these lists is
+# treated as rare enough that a slug carrying BOTH of its parts is unlikely to
+# belong to someone else.
+_COMMON_SURNAMES = frozenset("""
+smith johnson williams brown jones garcia miller davis rodriguez martinez
+hernandez lopez gonzalez wilson anderson thomas taylor moore jackson martin
+lee perez thompson white harris sanchez clark ramirez lewis robinson walker
+young allen king wright scott torres nguyen hill flores green adams nelson
+baker hall rivera campbell mitchell carter roberts gomez phillips evans turner
+diaz parker cruz edwards collins reyes stewart morris morales murphy cook
+rogers gutierrez ortiz morgan cooper peterson bailey reed kelly howard ramos
+kim cox ward richardson watson brooks chavez wood james bennett gray mendoza
+ruiz hughes price alvarez castillo sanders patel myers long ross foster
+jimenez powell jenkins perry russell sullivan bell coleman butler henderson
+barnes gonzales fisher vasquez simmons romero jordan patterson alexander
+hamilton graham reynolds griffin wallace moreno west cole hayes bryant herrera
+gibson ellis tran medina aguilar stevens murray ford castro marshall owens
+harrison fernandez mcdonald woods washington kennedy wells vargas henry chen
+freeman webb tucker guzman burns crawford olson simpson porter hunter gordon
+mendez silva shaw snyder mason dixon munoz hunt hicks holmes palmer wagner
+black robertson boyd rose stone salazar fox warren mills meyer rice schmidt
+garza daniels ferguson nichols stephens soto weaver ryan gardner payne grant
+dunn kelley spencer hawkins arnold pierce vazquez hansen peters santos hart
+bradley knight elliott cunningham duncan armstrong hudson carroll lane riley
+andrews ruiz harper fowler burke larson santiago maldonado morrison franklin
+carlson austin dominguez carr lawrence walsh jensen barrett mullins fields
+moran brennan wang li zhang liu yang huang zhao wu zhou xu sun ma zhu hu guo
+lin he gao luo zheng liang song tang xie han cao deng singh kumar sharma verma
+gupta reddy khan ali ahmed hussain rahman islam begum akhtar iqbal malik
+sheikh syed shah ansari qureshi silva santos oliveira souza lima pereira
+ferreira alves rodrigues costa gomes ribeiro carvalho almeida araujo mueller
+muller schmidt schneider fischer weber meyer wagner becker schulz hoffmann
+schaefer koch bauer richter klein wolf schroeder neumann zimmermann braun
+krueger hofmann hartmann lange schmitt werner krause meier lehmann rossi
+russo ferrari esposito bianchi romano colombo ricci marino greco bruno gallo
+conti costa giordano mancini rizzo lombardi moretti barbieri fontana caruso
+dubois bernard petit durand leroy moreau simon laurent lefebvre michel garcia
+david bertrand roux vincent fournier morel girard andre mercier blanc guerin
+boyer garnier chevalier francois legrand gauthier ivanov smirnov kuznetsov
+popov sokolov lebedev kozlov novikov morozov petrov volkov solovyov vasilyev
+zaytsev pavlov semyonov golubev vinogradov bogdanov park choi jung kang cho
+yoon jang lim shin seo kwon hwang song ahn hong yamamoto tanaka suzuki sato
+watanabe takahashi nakamura ito kobayashi yoshida yamada sasaki yamaguchi
+matsumoto inoue kimura hayashi shimizu saito jong jansen vries bakker visser
+smit meijer boer mulder bos vos peters hendriks dekker nielsen hansen andersen
+pedersen christensen larsen sorensen rasmussen jorgensen petersen madsen
+kristensen olsen thomsen johansson andersson karlsson nilsson eriksson larsson
+olsson persson svensson gustafsson pettersson jonsson novak nowak kowalski
+wojcik kaminski lewandowski zielinski szymanski wozniak dabrowski kozlowski
+jankowski mazur horvath nagy kovacs toth szabo varga kiss molnar nemeth farkas
+obrien byrne oconnor mccarthy oneill doyle gallagher doherty kavanagh mahoney
+""".split())
+
+_COMMON_GIVEN_NAMES = frozenset("""
+james robert john michael david william richard joseph thomas charles
+christopher daniel matthew anthony mark donald steven paul andrew joshua
+kenneth kevin brian george timothy ronald jason edward jeffrey ryan jacob gary
+nicholas eric jonathan stephen larry justin scott brandon benjamin samuel
+gregory alexander patrick frank raymond jack dennis jerry tyler aaron jose
+adam nathan henry zachary douglas peter kyle noah ethan jeremy walter
+christian keith roger terry austin sean gerald carl harold dylan arthur
+lawrence jordan jesse bryan billy bruce gabriel joe logan alan juan albert
+willie elijah wayne randy vincent mason roy ralph bobby russell bradley philip
+eugene mary patricia jennifer linda elizabeth barbara susan jessica sarah
+karen lisa nancy betty margaret sandra ashley kimberly emily donna michelle
+carol amanda dorothy melissa deborah stephanie rebecca sharon laura cynthia
+kathleen amy angela shirley anna brenda pamela emma nicole helen samantha
+katherine christine debra rachel carolyn janet catherine maria heather diane
+ruth julie olivia joyce virginia victoria kelly lauren christina joan evelyn
+judith megan andrea cheryl hannah jacqueline martha gloria teresa ann sara
+madison frances kathryn janice jean abigail alice julia judy sophia grace
+denise amber doris marilyn danielle beverly isabella theresa diana natalie
+brittany charlotte marie kayla alexis lori tim tom dan dave mike chris steve
+jeff greg jim bob rob rick nick matt joe sam ben alex ellen susan tina wendy
+carlos luis pedro miguel antonio francisco manuel jorge rafael ricardo eduardo
+fernando roberto sergio javier alberto ana isabel carmen rosa laura marta
+lucia elena sofia paula claudia patricia mohamed mohammed muhammad ahmad ahmed
+ali hassan hussein omar khalid youssef ibrahim mustafa fatima aisha maryam
+zainab amina khadija noor layla raj rahul amit sunil anil vijay ajay sanjay
+ravi arun deepak manoj suresh priya anita sunita neha pooja kavita meera divya
+wei ming lei jun hui yan jing xin feng bin tao gang jian yong hao chao lan
+mei ling ping xia hong yun juan yuki hiroshi takashi kenji akira satoshi
+haruto yuto sota ren yui aoi hana sakura min soo hyun jae seung woo young jin
+hee eun ji sun ivan sergey dmitry alexey andrey nikolai vladimir mikhail pavel
+olga natalia elena irina tatiana svetlana anastasia ekaterina
+""".split())
+
+
+def linkedin_slug(url):
+    """The <slug> of a linkedin.com/in/<slug> URL, lowercased, or ''.
+
+    Fail-soft in its own right, not just at its call sites: it is called from
+    inside the search-result loop and the gravatar loop, where an exception
+    would abort the whole contact over one malformed URL.
+    """
+    try:
+        m = _LINKEDIN_IN_RE.search(url or "")
+    except Exception:  # noqa: BLE001
+        return ""
+    if not m:
+        return ""
+    try:
+        slug = urllib.parse.unquote(m.group(1)).strip().strip("/").lower()
+    except Exception:  # noqa: BLE001
+        return ""
+    # LinkedIn appends a disambiguating hash to non-unique vanity URLs
+    # ("avery-placeholder-1a2b3c4"). The hash is entropy the OWNER did not
+    # choose and carries no name signal, so it is stripped before the name
+    # tests below rather than being mistaken for distinctiveness.
+    slug = re.sub(r"-[0-9a-f]{6,9}$", "", slug)
+    return slug
+
+
+def _slug_tokens(slug):
+    """The alphabetic runs of a slug, folded — 'avery-p-placeholder' -> [...]"""
+    folded = fold_accents(slug or "").lower()
+    return [t for t in re.split(r"[^a-z]+", folded) if t]
+
+
+def slug_is_distinctive(slug, name, name_given="", name_family=""):
+    """(ok, reason) — may this slug ALONE identify the contact?
+
+    Only true for a slug that encodes a full name rare enough that a namesake
+    collision is implausible. Everything else is refused, because a slug is an
+    identifier the owner chose, not a statement about who they are:
+
+      * a numeric or opaque slug names nobody;
+      * '<given><family>' for a common name matches thousands of people — this
+        is precisely the failure mode that attributed a stranger's accounts to
+        a contact, so a common surname or a common given+family pair is refused
+        even though the slug 'matches' perfectly;
+      * a slug carrying only ONE name part is a bare name part, which
+        _handle_is_bare_name_part already rejects everywhere else.
+
+    A middle name or second family name in the slug counts as extra
+    distinctiveness: it narrows the population far below the given+family pair.
+    """
+    slug = (slug or "").strip().lower()
+    if not slug:
+        return False, "no slug"
+    given, family = _split_name(name, name_given, name_family)
+    g = re.sub(r"[^a-z]", "", fold_accents(given or "").lower())
+    f = re.sub(r"[^a-z]", "", fold_accents(family or "").lower())
+    if not g or not f:
+        return False, "contact has no full name to compare against"
+
+    flat = re.sub(r"[^a-z0-9]", "", fold_accents(slug))
+    if not re.search(r"[a-z]", flat):
+        # "linkedin.com/in/884213705" — an opaque member id.
+        return False, "slug is numeric/opaque and identifies nobody"
+    if g not in flat or f not in flat:
+        return False, "slug does not carry both name parts"
+
+    g_common = g in _COMMON_GIVEN_NAMES
+    f_common = f in _COMMON_SURNAMES
+    # Anything in the slug beyond the two name parts: a middle name, a second
+    # surname, a maternal name. Digits do NOT count — "-2" is a disambiguator
+    # LinkedIn assigns, not something distinctive about the person.
+    def _token_is_only_name_parts(tok):
+        """Is this token just the name run together, with nothing added?
+
+        Token equality alone gets the separator wrong: 'john-smith' splits into
+        ['john','smith'] and correctly yields no extra, but 'johnsmith' is ONE
+        token equal to neither part, so it counted as a distinguishing extra and
+        the most common name in English was accepted on the slug alone -- while
+        the hyphenated spelling of the same name was refused. Strip the name
+        parts out and see whether anything of substance is left.
+        """
+        rest = tok
+        for part in (g, f):
+            if part:
+                rest = rest.replace(part, "", 1)
+        return len(rest) <= 1
+
+    extra = [t for t in _slug_tokens(slug)
+             if not _token_is_only_name_parts(t) and len(t) > 1
+             and t not in ("dr", "mr", "ms", "mrs", "phd", "md")]
+    if extra:
+        return True, ("slug carries the full name plus %s, which is far more "
+                      "specific than a given+family pair" % ", ".join(extra[:2]))
+    if f_common:
+        return False, ("surname is among the most common, so '<given><family>' "
+                       "is shared by many people")
+    if g_common and f_common:
+        return False, "both name parts are common"
+    if g_common:
+        # A common given name with a rare surname is still rare as a pair, but
+        # the margin is thin, so it is only accepted with nothing competing —
+        # which resolve_linkedin_candidates() enforces separately.
+        return True, "common given name but a rare surname"
+    return True, "both name parts are uncommon"
+
+
+def linkedin_tie(url, name, name_given="", name_family="", org="",
+                 location_city="", context_text="", source=""):
+    """(tie_kind, reason) if this URL is tied to the contact, else (None, why).
+
+    The tie must come from something OTHER than the slug's resemblance to the
+    name, except in the one narrow case slug_is_distinctive() allows. Ordered
+    strongest first:
+
+      first_party  the URL was found on a page already confirmed to be the
+                   contact's — their own site, their GitHub profile's links,
+                   a gravatar keyed on their address. The contact published it,
+                   so it is their assertion, the same grade as a curated URL.
+      context      the URL came back in a search result whose OWN text names
+                   the contact (adjacency, via _name_phrase_in_text) AND names
+                   their employer or city. Measured against a control of
+                   fabricated names + real employers, which returned zero
+                   results, so this text is the indexed page's, not an echo of
+                   the query.
+      slug         no independent tie, but the slug encodes a full name rare
+                   enough that a collision is implausible (see
+                   slug_is_distinctive).
+    """
+    slug = linkedin_slug(url)
+    if not slug:
+        return None, "not a linkedin.com/in URL"
+    if source == "first_party":
+        return "first_party", ("published on a page already confirmed to be "
+                               "the contact's")
+
+    ctx = context_text or ""
+    if ctx:
+        named = _name_phrase_in_text(name, ctx, name_given, name_family)
+        org_ok = bool(org) and org_name_in_text(org, ctx)
+        city_head = (location_city or "").split(",")[0].strip()
+        city_ok = bool(city_head) and city_head.lower() in ctx.lower()
+        if named and (org_ok or city_ok):
+            return "context", ("result text names the contact and their %s"
+                               % ("employer" if org_ok else "city"))
+
+    ok, why = slug_is_distinctive(slug, name, name_given, name_family)
+    if ok:
+        return "slug", "no independent tie; " + why
+    return None, why
+
+
+_LINKEDIN_TIE_RANK = {"first_party": 0, "context": 1, "slug": 2}
+
+# Whether a distinctive-slug tie may source a value on its own. It is the
+# weakest of the three and the only one that is not INDEPENDENT of the slug: it
+# argues that a namesake is improbable rather than pointing at a second source.
+# It is enabled because three separate things have to hold before it fires --
+# the slug must carry BOTH name parts, neither part may appear on public name-
+# frequency data (or the slug must carry a middle name too), and nothing else
+# may compete for this contact (resolve_linkedin_candidates refuses on any
+# disagreement) -- and because weave then puts the URL through url_quality,
+# which additionally rejects a slug naming a DIFFERENT person in the address
+# book. Set to False to require a genuinely independent tie for every LinkedIn
+# URL; the other two tie kinds are unaffected.
+LINKEDIN_ACCEPT_SLUG_ONLY = True
+
+
+def resolve_linkedin_candidates(candidates, name, name_given="", name_family="",
+                                org="", location_city=""):
+    """(accepted|None, [rejected]) from LinkedIn URLs seen for one contact.
+
+    candidates: [{"url":..., "context":..., "source":...}]
+
+    Two people of one name are the failure this whole module exists to prevent,
+    and the cheapest detector for them is disagreement: if two DIFFERENT slugs
+    both look tied to this contact, at least one of them is a stranger and we
+    cannot tell which, so BOTH are refused. A single surviving candidate is
+    accepted at the strength of its tie.
+    """
+    by_slug = {}
+    rejected = []
+    for c in candidates or []:
+        url = (c.get("url") or "").strip()
+        slug = linkedin_slug(url)
+        if not slug:
+            continue
+        kind, why = linkedin_tie(
+            url, name, name_given=name_given, name_family=name_family,
+            org=org, location_city=location_city,
+            context_text=c.get("context", ""), source=c.get("source", ""))
+        if not kind:
+            rejected.append({"url": url, "slug": slug, "reason": why})
+            continue
+        prev = by_slug.get(slug)
+        if not prev or _LINKEDIN_TIE_RANK[kind] < _LINKEDIN_TIE_RANK[prev["tie"]]:
+            by_slug[slug] = {"url": url, "slug": slug, "tie": kind,
+                             "reason": why, "source": c.get("source", "")}
+
+    if not by_slug:
+        return None, rejected
+    if len(by_slug) > 1:
+        # A first-party link is the contact's own assertion and outranks any
+        # number of search-derived namesakes, so it still wins outright.
+        fp = [v for v in by_slug.values() if v["tie"] == "first_party"]
+        if len(fp) == 1:
+            for v in by_slug.values():
+                if v is not fp[0]:
+                    rejected.append({"url": v["url"], "slug": v["slug"],
+                                     "reason": ("another URL for this contact is "
+                                                "first-party, which outranks this")})
+            return fp[0], rejected
+        for v in by_slug.values():
+            rejected.append({
+                "url": v["url"], "slug": v["slug"],
+                "reason": ("%d different LinkedIn profiles look tied to this "
+                           "contact (%s) — at least one is a namesake and there "
+                           "is no way to tell which, so none is accepted"
+                           % (len(by_slug), ", ".join(sorted(by_slug)[:4])))})
+        return None, rejected
+
+    only = list(by_slug.values())[0]
+    return only, rejected
+
+
+# ── Mining the five target fields out of a page we already fetched ───────────
+# Every page this pipeline opens costs a request and a timeout; reading only
+# "does this name the contact?" out of it and discarding the rest is wasted
+# work. These helpers pull phone / email / city / outbound-profile links from
+# HTML that has ALREADY been fetched for corroboration.
+#
+# Measured before building it, on 40 contacts whose record carries a personal
+# site: a naive phone regex "found" a number on 22 of 25 pages and nearly all
+# of them were junk (an obituary listing, a comic strip, dates and ISBNs).
+# Validating with libphonenumber AND requiring the number to sit in a telephone
+# context cut that to 2. The strict version is the one worth having: the loose
+# one would have written a wrong phone number onto 20 contacts.
+# Imported at module level but never assumed present: the venv ships it today,
+# and a future one that does not must degrade to "no phone mined", not crash a
+# whole contact.
+try:
+    import phonenumbers as _phonenumbers
+except Exception:  # noqa: BLE001
+    _phonenumbers = None
+
+_TEL_HREF_RE = re.compile(r"href\s*=\s*[\"']\s*tel:([^\"'>]{5,32})", re.IGNORECASE)
+_MAILTO_RE = re.compile(r"href\s*=\s*[\"']\s*mailto:([^\"'?>]{3,120})", re.IGNORECASE)
+_PHONE_CONTEXT_RE = re.compile(
+    r"(?i)\b(phone|telephone|tel|mobile|cell|call|contact|reach me|whatsapp)\b")
+# Numbers that are valid but belong to an organisation's switchboard rather than
+# to a person. Attributing one to a contact is a wrong value, not a missing one.
+_TOLLFREE_PREFIXES = ("800", "833", "844", "855", "866", "877", "888")
+_JSONLD_RE = re.compile(r"(?is)<script[^>]+application/ld\+json[^>]*>(.*?)</script>")
+_GEO_PLACENAME_RE = re.compile(
+    r"(?is)<meta[^>]+name=[\"']geo\.placename[\"'][^>]+content=[\"']([^\"']{2,80})")
+# One inline-flag group, at the very start: Python refuses a global flag that
+# appears part-way through a pattern, and both branches need the same flags.
+_REL_ME_RE = re.compile(
+    r"(?is)"
+    r"<a[^>]+rel=[\"'][^\"']*\bme\b[^\"']*[\"'][^>]*href=[\"']([^\"']+)[\"']"
+    r"|<a[^>]+href=[\"']([^\"']+)[\"'][^>]*rel=[\"'][^\"']*\bme\b[^\"']*[\"']")
+# "Springfield, OR" / "Springfield, Oregon" / "Springfield, United Kingdom".
+_CITY_STATE_RE = re.compile(
+    r"\b([A-Z][A-Za-z.\-']{2,24}(?:\s+[A-Z][A-Za-z.\-']{1,24}){0,2}),\s*"
+    r"([A-Z]{2}|[A-Z][a-z]{2,24}(?:\s+[A-Z][a-z]{2,24}){0,2})\b")
+_ADDRESS_CONTEXT_RE = re.compile(
+    r"(?i)\b(based in|located in|lives in|living in|address|office|studio|"
+    r"headquarter|hq|from)\b")
+_ASSET_EMAIL_RE = re.compile(r"\.(png|jpe?g|gif|svg|webp|css|js|ico|woff2?)$", re.I)
+# Mail hosts that belong to infrastructure, not to a person.
+_NON_CONTACT_MAIL_HOSTS = {
+    "example.com", "example.org", "example.net", "example.test", "domain.com",
+    "email.com", "sentry.io", "sentry-next.wixpress.com", "wixpress.com",
+    "wix.com", "squarespace.com", "godaddy.com", "shopify.com", "localhost",
+}
+
+
+def _valid_phone(raw, region_hint="US"):
+    """E.164 for a raw string that libphonenumber accepts as a REAL number.
+
+    is_valid_number, not is_possible_number: 'possible' passes any string of the
+    right length, which is what let dates and order numbers through.
+    """
+    if _phonenumbers is None:
+        return ""
+    try:
+        num = _phonenumbers.parse(raw, region_hint or "US")
+        if not _phonenumbers.is_valid_number(num):
+            return ""
+        e164 = _phonenumbers.format_number(
+            num, _phonenumbers.PhoneNumberFormat.E164)
+    except Exception:  # noqa: BLE001
+        return ""
+    if e164.startswith("+1") and e164[2:5] in _TOLLFREE_PREFIXES:
+        return ""
+    return e164
+
+
+def mine_phones(raw_html, text, region_hint="US"):
+    """[{phone, how}] — validated numbers, strongest evidence first.
+
+    tel: links and schema.org 'telephone' are explicit assertions that the
+    string IS a telephone number; a bare match in prose is not, so it must at
+    least sit next to a telephone word.
+    """
+    out, seen = [], set()
+    if _phonenumbers is None:
+        return out
+
+    def _take(raw, how):
+        e164 = _valid_phone(raw, region_hint)
+        if e164 and e164 not in seen:
+            seen.add(e164)
+            out.append({"phone": e164, "how": how})
+
+    try:
+        for m in _TEL_HREF_RE.finditer(raw_html or ""):
+            _take(m.group(1), "tel_link")
+        for m in _JSONLD_RE.finditer(raw_html or ""):
+            for pm in re.finditer(r'"telephone"\s*:\s*"([^"]{5,32})"', m.group(1)):
+                _take(pm.group(1), "schema_org")
+        for m in _PHONE_CONTEXT_RE.finditer(text or ""):
+            window = (text or "")[m.start():m.start() + 100]
+            for match in _phonenumbers.PhoneNumberMatcher(
+                    window, region_hint or "US"):
+                _take(_phonenumbers.format_number(
+                    match.number,
+                    _phonenumbers.PhoneNumberFormat.E164), "labelled")
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
+def mine_emails(raw_html, name=""):
+    """[{email, how}] — addresses published on the page, role addresses dropped.
+
+    A mailto: link is the page saying "write here"; a bare address in the body
+    is weaker but still first-party on the contact's own site.
+    """
+    out, seen = [], set()
+    name_toks = {t for t in normalize_name(name or "").split() if len(t) > 2}
+
+    def _take(addr, how):
+        addr = (addr or "").strip().strip(".,;:<>()[]").lower()
+        if not addr or "@" not in addr or not _EMAIL_RE.match(addr):
+            return
+        if addr in _PLACEHOLDER_EMAILS or _ASSET_EMAIL_RE.search(addr):
+            return
+        local, _, host = addr.partition("@")
+        if host in _NON_CONTACT_MAIL_HOSTS or host.endswith(".wixpress.com"):
+            return
+        if local in GENERIC_EMAIL_LOCALS and not (name_toks & set(
+                re.split(r"[^a-z]+", local))):
+            return
+        if addr in seen:
+            return
+        seen.add(addr)
+        out.append({"email": addr, "how": how})
+
+    try:
+        for m in _MAILTO_RE.finditer(raw_html or ""):
+            _take(urllib.parse.unquote(m.group(1)), "mailto")
+        for addr in set(re.findall(
+                r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", raw_html or "")):
+            _take(addr, "body")
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
+def mine_city(raw_html, text):
+    """[{city, how}] — structured location first, prose only in context.
+
+    schema.org addressLocality and the geo.placename meta tag are the page
+    declaring a place. A "Word, XX" pattern in prose is a guess, so it is only
+    taken when an address word sits next to it, and it is always a CANDIDATE.
+    """
+    out, seen = [], set()
+
+    def _take(val, how):
+        val = re.sub(r"\s+", " ", (val or "")).strip().strip(",;")
+        if not val or len(val) > 60 or len(val) < 2:
+            return
+        if val.lower() in seen:
+            return
+        seen.add(val.lower())
+        out.append({"city": val, "how": how})
+
+    try:
+        for m in _JSONLD_RE.finditer(raw_html or ""):
+            blob = m.group(1)
+            loc = re.search(r'"addressLocality"\s*:\s*"([^"]{2,60})"', blob)
+            reg = re.search(r'"addressRegion"\s*:\s*"([^"]{2,40})"', blob)
+            if loc:
+                _take(loc.group(1) + (", " + reg.group(1) if reg else ""),
+                      "schema_org")
+        for m in _GEO_PLACENAME_RE.finditer(raw_html or ""):
+            _take(m.group(1), "geo_meta")
+        for m in _ADDRESS_CONTEXT_RE.finditer(text or ""):
+            window = (text or "")[m.start():m.start() + 90]
+            cm = _CITY_STATE_RE.search(window)
+            if cm:
+                _take(cm.group(1) + ", " + cm.group(2), "labelled_prose")
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
+def mine_outbound_links(raw_html, page_url="", name=""):
+    """{"linkedin": [...], "websites": [...], "profiles": [parse_profile_url...]}
+
+    Everything here comes off a page the caller has already confirmed belongs to
+    the contact, so these are links the contact PUBLISHED about themselves —
+    the first-party tie in linkedin_tie(). A website is only reported when the
+    page marks it rel="me" (an explicit identity assertion) or its domain
+    carries the contact's name, because a personal site links to plenty of
+    pages that are not the author's.
+    """
+    out = {"linkedin": [], "websites": [], "profiles": []}
+    seen_li, seen_w, seen_p = set(), set(), set()
+    host_here = _host_of(page_url)
+    name_flat = re.sub(r"[^a-z]", "", fold_accents(name or "").lower())
+    try:
+        rel_me = set()
+        for m in _REL_ME_RE.finditer(raw_html or ""):
+            u = (m.group(1) or m.group(2) or "").strip()
+            if u.startswith("http"):
+                rel_me.add(u.split("#")[0])
+        for m in _HREF_RE.finditer(raw_html or ""):
+            u = m.group(1).split("#")[0].strip()
+            if not u.startswith("http"):
+                continue
+            slug = linkedin_slug(u)
+            if slug:
+                if slug not in seen_li:
+                    seen_li.add(slug)
+                    out["linkedin"].append(u.split("?")[0])
+                continue
+            h = _host_of(u)
+            if not h or h == host_here:
+                continue
+            parsed = parse_profile_url(u)
+            if parsed and parsed.get("handle"):
+                key = (parsed["platform"], (parsed["handle"] or "").lower())
+                if key not in seen_p:
+                    seen_p.add(key)
+                    out["profiles"].append(parsed)
+                continue
+            if _host_class(h) != _HOST_RANK_PERSONAL:
+                continue
+            label = re.sub(r"[^a-z]", "", _registrable_label(h) or "")
+            owns = bool(name_flat) and bool(label) and (
+                label in name_flat or name_flat in label)
+            if u.split("?")[0] in rel_me or owns:
+                if h not in seen_w:
+                    seen_w.add(h)
+                    out["websites"].append(u.split("?")[0])
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
+# How a mined value was found, best evidence first. This ranking is what decides
+# which of several candidate values (if any) is written to a contact record.
+MINED_HOW_RANK = {"tel_link": 0, "mailto": 0, "schema_org": 1, "geo_meta": 1,
+                  "labelled": 2, "labelled_prose": 2, "body": 3, "near_name": 4}
+
+
+def pick_mined_value(hits, key):
+    """The single best-sourced value, or None when the best rank is TIED
+    between two different values.
+
+    Refusing on a tie is the point, not a limitation. Measured on real pages: a
+    B2B supplier directory returned seven different tel: links, all rank 0, all
+    belonging to companies rather than to the contact; a tribal directory
+    returned three addresses next to three different names. Picking "the first
+    one" on either page writes a stranger's number onto a contact. Where the
+    page really is the contact's and really does carry one number, there is no
+    tie and the value is taken.
+    """
+    best = {}
+    for h in hits or []:
+        v = (h.get(key) or "").strip()
+        if not v:
+            continue
+        r = MINED_HOW_RANK.get(h.get("how"), 9)
+        if v not in best or r < best[v][0]:
+            best[v] = (r, h)
+    if not best:
+        return None
+    top = min(r for r, _ in best.values())
+    winners = [(v, h) for v, (r, h) in best.items() if r == top]
+    if len(winners) != 1:
+        return None
+    v, h = winners[0]
+    return {"value": v, "how": h.get("how"), "source_url": h.get("source_url", ""),
+            "rank": top, "competing": len(best)}
+
+
+def mine_contact_fields(raw_html, text="", name="", name_given="",
+                        name_family="", region_hint="US", page_url=""):
+    """All five target fields out of one already-fetched page.
+
+    Returns {"phones", "emails", "cities", "linkedin", "websites", "profiles"}.
+    Never raises: a page that defeats one extractor must still yield the others.
+    """
+    if not text:
+        text = ""
+    res = {"phones": [], "emails": [], "cities": [], "linkedin": [],
+           "websites": [], "profiles": []}
+    if not raw_html:
+        return res
+    try:
+        res["phones"] = mine_phones(raw_html, text, region_hint)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        res["emails"] = mine_emails(raw_html, name)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        res["cities"] = mine_city(raw_html, text)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        links = mine_outbound_links(raw_html, page_url, name)
+        res["linkedin"] = links["linkedin"]
+        res["websites"] = links["websites"]
+        res["profiles"] = links["profiles"]
+    except Exception:  # noqa: BLE001
+        pass
+    return res
+
+
+# ── Reaching a GitHub account WITHOUT an email to pivot from ─────────────────
+# github_commit_emails() is the most direct route to an address for a contact
+# who has none, but it could never fire: it only reads accounts that already
+# passed the identity gate, and a contact with no email has no email-derived
+# handle, so the only handles available are manufactured from their name — which
+# the gate correctly refuses as circular. The account was unreachable precisely
+# for the population the technique was built for.
+#
+# GitHub's user search closes that loop with an INDEPENDENT signal. It matches
+# on the profile's own `name` field, which the account owner typed, not on a
+# handle we derived from the contact. A hit is then confirmed against two things
+# the contact record already asserts — their name AND (employer or city) — so a
+# namesake with a different company or city is refused rather than harvested.
+def github_profile_is_harvestable(prof):
+    """May this GitHub profile's commit history be read for an address?
+
+    The SAME predicate decides two things that were previously written out
+    separately and disagreed: whether we already have a usable account (so the
+    user search can be skipped) and whether the harvest loop will actually read
+    one. When those two drifted apart, a REJECTED GitHub profile -- one whose
+    handle was manufactured from the contact's name, so its name agreement is
+    circular -- was enough to suppress the search, while the harvest then
+    skipped that same profile for being circular. Nothing ran, which is exactly
+    the "unreachable by construction" trap this technique started in.
+    """
+    if not isinstance(prof, dict):
+        return False
+    if (prof.get("site") or "").lower() != "github":
+        return False
+    if prof.get("name_conflict") or prof.get("circular_anchor"):
+        return False
+    if not (prof.get("curated")
+            or (prof.get("name_shared_tokens", 0) >= 2
+                and prof.get("family_present"))):
+        return False
+    return bool((prof.get("handle") or "").strip())
+
+
+def github_user_search(name, org="", location_city="", timeout=10, max_users=5):
+    """([{handle, fullname, company, location, why}], PersonToolRecord).
+
+    Only accounts whose PROFILE NAME confirms the contact and whose company or
+    location agrees are returned. Fail-soft: rate limits, an outage or a
+    malformed name cost one tool entry and nothing else.
+    """
+    rec = {"tool_name": "github_user_search", "invoked_at": _now(),
+           "input_type": "name", "input_value": (name or "")[:120],
+           "status": "error", "findings_count": 0, "error": None,
+           "authenticated": bool(_github_token())}
+    name = (name or "").strip()
+    if len(name.split()) < 2:
+        rec["status"] = "skipped"
+        rec["error"] = "need a full name; one token matches too many accounts"
+        return [], rec
+    if not (org or "").strip() and not (location_city or "").strip():
+        # Without a second axis this is a bare-name sweep, which is the exact
+        # shape that produced false attributions before. Refuse it.
+        rec["status"] = "skipped"
+        rec["error"] = ("no employer or city to corroborate against; a name-only "
+                        "match cannot be told apart from a namesake")
+        return [], rec
+
+    q = urllib.parse.quote('"%s" in:name type:user' % name)
+    data = _github_json("/search/users?q=%s&per_page=%d" % (q, max_users), timeout)
+    if not isinstance(data, dict):
+        rec["error"] = "search API unavailable (rate limit or outage)"
+        return [], rec
+    rec["status"] = "success"
+
+    city_head = (location_city or "").split(",")[0].strip().lower()
+    out = []
+    for item in (data.get("items") or [])[:max_users]:
+        # Per-candidate try/except: one account whose profile defeats the name
+        # comparison must not cost the other candidates or the contact.
+        try:
+            handle = ((item or {}).get("login") or "").strip()
+            if not handle:
+                continue
+            fields = github_api_fields(handle, timeout=timeout) or {}
+            full = (fields.get("fullname") or "").strip()
+            if not full or not _name_confirms(name, full):
+                continue
+            company = (fields.get("org") or "").strip()
+            loc = (fields.get("location") or "").strip()
+            org_ok = bool(org) and bool(company) and org_name_in_text(org, company)
+            city_ok = bool(city_head) and bool(loc) and city_head in loc.lower()
+            if not (org_ok or city_ok):
+                continue
+        except Exception:  # noqa: BLE001
+            continue
+        out.append({
+            "handle": handle, "fullname": full, "company": company,
+            "location": loc, "blog_url": fields.get("blog_url", ""),
+            "bio": fields.get("bio", ""),
+            "why": ("profile name confirms the contact and the profile's %s agrees"
+                    % ("company" if org_ok else "location")),
+        })
+    rec["findings_count"] = len(out)
+    return out, rec
+
 
 
 # ── Sites where a handle "existing" carries no information ───────────────────
@@ -2903,7 +3703,8 @@ def research_person(name, email="", employer="", handles=None, phone="",
                     email_permutation_limit=MAX_EMAIL_PERMUTATIONS,
                     enable_company_domain=True, org_domain="", peer_emails=None,
                     enable_company_pages=True, enable_github_emails=True,
-                    enable_targeted_site_search=True, enable_user_scanner=True):
+                    enable_targeted_site_search=True, enable_user_scanner=True,
+                    missing_fields=None, enable_github_user_search=True):
     """Run the Tier-1 person pipeline. Returns a structured research result.
 
     The first seven parameters keep their original positional order so existing
@@ -2915,6 +3716,29 @@ def research_person(name, email="", employer="", handles=None, phone="",
     occupation = (occupation or "").strip()
     location_city = (location_city or "").strip()
     known_urls = [u for u in (known_urls or []) if u]
+
+    # Which of the five target fields this contact still lacks. The caller
+    # (weave_enrich) knows, because it holds the record; None means "assume all
+    # are missing", which is what the CLI and any older caller want. Every
+    # expensive technique below is gated on a field it can actually fill, so a
+    # contact missing only a LinkedIn URL no longer pays for whois, email
+    # permutation and a company-domain resolution that cannot help them.
+    _missing = (set(missing_fields) if missing_fields is not None
+                else set(TARGET_FIELDS))
+    result_missing = sorted(_missing)
+
+    def _wants(*fields):
+        return any(f in _missing for f in fields)
+
+    # Region for libphonenumber. A number already on file settles it; otherwise
+    # fall back to US, which is what the previous code assumed everywhere.
+    _region_hint = "US"
+    try:
+        _pi0 = phone_intel(phone) if phone else {}
+        if _pi0.get("region_code"):
+            _region_hint = _pi0["region_code"]
+    except Exception:  # noqa: BLE001
+        pass
 
     result = {
         "subject": {"name": name, "email": email, "employer": employer,
@@ -2937,7 +3761,83 @@ def research_person(name, email="", employer="", handles=None, phone="",
         "enrichment": {},
         "identity": {"level": "none", "corroborating_sites": [],
                      "curated_sites": [], "reason": ""},
+        # Everything mined out of pages that were fetched anyway. These are
+        # CANDIDATES carrying their own provenance; the promotion rules at the
+        # bottom of this function decide which become enrichment values.
+        "mined": {"phones": [], "emails": [], "cities": [], "websites": []},
+        "linkedin_candidates": [],
+        "linkedin_rejected": [],
+        "linkedin": None,
+        "missing_fields": result_missing,
     }
+
+    def _absorb_page(url, raw, text, first_party=False, why="",
+                     name_confirmed=False):
+        """Mine one already-fetched page for the five target fields.
+
+        `first_party` means the page has ALREADY been confirmed to be the
+        contact's own, which is what licenses attributing a phone number or an
+        address anywhere on it to them, and what makes a LinkedIn link found
+        here the strongest tie available (linkedin_tie -> 'first_party').
+
+        `name_confirmed` is the weaker case: the page NAMES the contact but is
+        not theirs -- a staff directory, a conference programme, a news piece.
+        A directory lists many people's numbers, so a value anywhere on the page
+        cannot be attributed to this one; only values sitting NEXT TO the
+        contact's name are taken, using the same adjacency machinery
+        (_name_phrase_spans) that role_near_name already relies on. Page-wide
+        signals -- tel: links, mailto:, schema.org -- are deliberately not read
+        in that case, because they describe the page's owner, not its subject.
+        """
+        try:
+            mined = mine_contact_fields(raw, text, name, name_given, name_family,
+                                        region_hint=_region_hint, page_url=url)
+        except Exception:  # noqa: BLE001
+            return {}
+        for u in mined.get("linkedin", []):
+            result["linkedin_candidates"].append({
+                "url": u, "context": text[:1500],
+                "source": "first_party" if first_party else "page",
+                "found_on": url, "why": why})
+        if not first_party:
+            if not name_confirmed:
+                return mined
+            try:
+                spans = _name_phrase_spans(name, text, name_given, name_family)
+            except Exception:  # noqa: BLE001
+                spans = []
+            if not spans:
+                return mined
+            near = " \n ".join(
+                text[max(0, a - 300):b + 300] for a, b in spans[:6])
+            try:
+                for hit in mine_phones("", near, _region_hint):
+                    result["mined"]["phones"].append(
+                        {"phone": hit["phone"], "how": "near_name",
+                         "source_url": url})
+                for hit in mine_emails(near, name):
+                    result["mined"]["emails"].append(
+                        {"email": hit["email"], "how": "near_name",
+                         "source_url": url})
+                for hit in mine_city("", near):
+                    result["mined"]["cities"].append(
+                        {"city": hit["city"], "how": "near_name",
+                         "source_url": url})
+            except Exception:  # noqa: BLE001
+                pass
+            return mined
+        for hit in mined.get("phones", []):
+            result["mined"]["phones"].append(
+                {"phone": hit["phone"], "how": hit["how"], "source_url": url})
+        for hit in mined.get("emails", []):
+            result["mined"]["emails"].append(
+                {"email": hit["email"], "how": hit["how"], "source_url": url})
+        for hit in mined.get("cities", []):
+            result["mined"]["cities"].append(
+                {"city": hit["city"], "how": hit["how"], "source_url": url})
+        for w in mined.get("websites", []):
+            result["mined"]["websites"].append({"website": w, "source_url": url})
+        return mined
 
     # Known phone is an identity anchor already on file. PhoneInfoga is a Go
     # binary and this box has no Go toolchain, but its only offline scanner is
@@ -3040,6 +3940,38 @@ def research_person(name, email="", employer="", handles=None, phone="",
             "source_refs": [{"url": "contact_record", "retrieved_at": _now(),
                              "quote": prof["url"]}],
         })
+
+    # ---- The contact's OWN pages, mined. A URL on the contact record is the
+    # owner's assertion that the page is theirs, so it is first-party by the
+    # same standard as expand_known_urls already applies. Until now these pages
+    # were fetched for their <title> alone and thrown away, which is the most
+    # expensive way to learn the least: the contact's own site is where their
+    # phone number, their address and their other profiles actually live.
+    _fp_seen = set()
+    for _prof in curated_profiles:
+        if _prof.get("name_conflict"):
+            continue
+        _u = _prof.get("url") or ""
+        _cands = [_u] if _prof.get("kind") == "website" else []
+        if _prof.get("blog_url"):
+            _cands.append(_prof["blog_url"])
+        for _cu in _cands:
+            _k = (_cu or "").rstrip("/").lower()
+            if not _k or _k in _fp_seen or _host_is_unfetchable(_cu):
+                continue
+            _fp_seen.add(_k)
+            try:
+                _t, _b, _r = fetch_page_text(_cu, with_raw=True)
+                if _r:
+                    _absorb_page(_cu, _r, (_t or "") + " " + (_b or ""),
+                                 first_party=True,
+                                 why="URL on the contact record")
+            except Exception as _e:  # noqa: BLE001
+                result["tools"].append({
+                    "tool_name": "first_party_mine", "invoked_at": _now(),
+                    "input_type": "url", "input_value": _cu[:200],
+                    "status": "error", "findings_count": 0,
+                    "error": str(_e)[:200]})
 
     # ---- Handle candidates: explicit, then URL slugs, then email, then name.
     handle_candidates = []
@@ -3308,6 +4240,14 @@ def research_person(name, email="", employer="", handles=None, phone="",
             result["enrichment"].setdefault("location_city_source", "gravatar")
             result["enrichment"].setdefault("location_city_confidence", 0.8)
         for u in (grav["accounts"] + grav["urls"]):
+            # Gravatar is keyed on md5(the contact's own address), so a URL the
+            # profile lists is the contact's own assertion about themselves —
+            # first-party, the strongest LinkedIn tie there is.
+            if linkedin_slug(u):
+                result["linkedin_candidates"].append({
+                    "url": u, "context": "", "source": "first_party",
+                    "found_on": grav.get("profile_url") or "gravatar",
+                    "why": "listed on the gravatar keyed to the contact's email"})
             parsed = parse_profile_url(u)
             if parsed and not any((p.get("url") or "").rstrip("/") == u.rstrip("/")
                                   for p in result["profiles"]):
@@ -3329,11 +4269,17 @@ def research_person(name, email="", employer="", handles=None, phone="",
     # website ('ana@anaperez.example' -> anaperez.example). The local part
     # can be too short to be a handle while the DOMAIN identifies them exactly,
     # so this runs before falling back to search.
-    if level not in ("high", "med"):
+    # Gated on the FIELD it can fill, not on the identity level. The old
+    # condition ("only when identity is still weak") optimised for corroborating
+    # who someone is; once that succeeded the run stopped, so a contact with a
+    # confirmed identity and no phone number never had one looked for. Identity
+    # is the admission ticket to WRITING a value, not a reason to stop looking
+    # for one.
+    if level not in ("high", "med") or _wants("site", "phone", "city", "linkedin"):
         site = email_domain_site(email)
         if site and site.rstrip("/").lower() not in {
                 (p.get("url") or "").rstrip("/").lower() for p in result["profiles"]}:
-            title, body = fetch_page_text(site)
+            title, body, _raw = fetch_page_text(site, with_raw=True)
             # A personal domain that stopped resolving is the commonest way a
             # contact's only first-party page disappears. The archived copy
             # still names them, which is exactly what corroboration needs, and
@@ -3392,9 +4338,19 @@ def research_person(name, email="", employer="", handles=None, phone="",
                     # The site is confirmed to be theirs, so mine it: the links
                     # a person publishes about themselves are the highest-grade
                     # signal available, better than anything inferred.
-                    mined = (mine_personal_site(site, name) if not archived
+                    if not archived:
+                        # The domain is the contact's own address domain and the
+                        # page names them: first-party by both tests, so the
+                        # whole page may be mined.
+                        _absorb_page(site, _raw, (title or "") + " " + (body or ""),
+                                     first_party=True,
+                                     why="the contact's own email domain")
+                    mined = (mine_personal_site(site, name,
+                                                region_hint=_region_hint)
+                             if not archived
                              else {"links": [], "occupation": "", "tagline": "",
-                                   "emails": []})
+                                   "emails": [], "phones": [], "cities": [],
+                                   "linkedin": [], "websites": []})
                     for parsed in mined["links"]:
                         if any((p.get("url") or "").rstrip("/") ==
                                parsed["url"].rstrip("/") for p in result["profiles"]):
@@ -3550,7 +4506,8 @@ def research_person(name, email="", employer="", handles=None, phone="",
         result["company"] = {"domain": _company_domain, "method": "caller",
                              "confidence": 0.9, "verified": False,
                              "evidence": "supplied by the caller"}
-    elif enable_company_domain and org and level not in ("high", "med"):
+    elif enable_company_domain and org and (
+            level not in ("high", "med") or _wants("email", "phone", "site")):
         try:
             _cdom, _crecs = resolve_company_domain(
                 org, peers=peer_emails, searxng_url=searxng_url,
@@ -3580,7 +4537,8 @@ def research_person(name, email="", employer="", handles=None, phone="",
     # NAME the contact by the same adjacency standard as any other page — the
     # page listing everyone at the company is not evidence about this one
     # person until their name is on it.
-    if enable_company_pages and _company_domain and level not in ("high", "med"):
+    if enable_company_pages and _company_domain and (
+            level not in ("high", "med") or _wants("email", "phone", "city")):
         try:
             _cpage, _precs = mine_company_people_page(
                 _company_domain, name, name_given=name_given,
@@ -3648,19 +4606,62 @@ def research_person(name, email="", employer="", handles=None, phone="",
     # confirmed account converts into a reachable address. Only accounts that
     # already passed the identity gate are harvested — reading a stranger's
     # commits would attribute a stranger's address.
-    if enable_github_emails and not email:
+    if enable_github_emails and ("email" in _missing or not email):
+        # Reach an account for a contact who has no email to pivot from. Without
+        # this the harvest below had no GitHub profile to read for exactly the
+        # population it exists to serve -- see github_user_search.
+        # Only an account we could ACTUALLY harvest suppresses the search.
+        _have_usable_gh = any(github_profile_is_harvestable(p)
+                              for p in result["profiles"])
+        if enable_github_user_search and not email and not _have_usable_gh:
+            try:
+                _ghu, _ghrec = github_user_search(
+                    name, org=org, location_city=location_city)
+            except Exception as _e:  # noqa: BLE001
+                _ghu, _ghrec = [], {
+                    "tool_name": "github_user_search", "invoked_at": _now(),
+                    "input_type": "name", "input_value": name[:120],
+                    "status": "error", "findings_count": 0,
+                    "error": str(_e)[:200]}
+            result["tools"].append(_ghrec)
+            for _u in _ghu:
+                # name_shared_tokens/family_present are set because this account
+                # passed _name_confirms on its OWN profile name AND agreed with
+                # the employer or city on the contact record -- two independent
+                # facts, which is the same bar a corroborating profile clears.
+                result["profiles"].append({
+                    "site": "GitHub", "handle": _u["handle"],
+                    "url": "https://github.com/" + _u["handle"],
+                    "fullname": _u["fullname"], "location": _u["location"],
+                    "bio": _u["bio"], "blog_url": _u["blog_url"],
+                    "org": _u["company"], "provenance": "github_user_search",
+                    "curated": False, "kind": "profile",
+                    "handle_origin": "github_search",
+                    "name_shared_tokens": 2, "family_present": True,
+                })
+                result["findings"].append({
+                    "finding_id": "GS%03d" % (len(result["findings"]) + 1),
+                    "claim": ("GitHub account '%s' names the contact and %s"
+                              % (_u["handle"], _u["why"])),
+                    "confidence": "high",
+                    "source_refs": [
+                        {"url": "https://github.com/" + _u["handle"],
+                         "retrieved_at": _now(),
+                         "quote": (_u["fullname"] + " | " + _u["company"]
+                                   + " | " + _u["location"])[:300]}],
+                })
+                if level == "none":
+                    level = "med"
+                    result["identity"]["level"] = level
+                    result["identity"]["reason"] = (
+                        "a GitHub account naming the contact agrees with the "
+                        "employer or city on their record")
         _gh_seen = set()
         for _prof in list(result["profiles"]):
-            if (_prof.get("site") or "").lower() != "github":
-                continue
-            if _prof.get("name_conflict") or _prof.get("circular_anchor"):
-                continue
-            if not (_prof.get("curated")
-                    or (_prof.get("name_shared_tokens", 0) >= 2
-                        and _prof.get("family_present"))):
+            if not github_profile_is_harvestable(_prof):
                 continue
             _h = (_prof.get("handle") or "").strip()
-            if not _h or _h.lower() in _gh_seen:
+            if _h.lower() in _gh_seen:
                 continue
             _gh_seen.add(_h.lower())
             try:
@@ -3711,7 +4712,10 @@ def research_person(name, email="", employer="", handles=None, phone="",
     # find a mailbox that is actually registered somewhere. CANDIDATES ONLY:
     # holehe proves an address exists, never whose it is, so these never raise
     # the identity level and never source a field.
-    if enable_email_permutation and level not in ("high", "med"):
+    # Measured negative, kept only for the population it was built for: a prior
+    # pass found address permutation worth 1 hit in 35 probes. It never sources
+    # a field, so it now runs ONLY when the email is the missing field.
+    if enable_email_permutation and "email" in _missing and level not in ("high", "med"):
         _emp_dom = ""
         if email and "@" in email and employer_from_email(email, name):
             _emp_dom = email.split("@", 1)[1].strip().lower()
@@ -3750,10 +4754,12 @@ def research_person(name, email="", employer="", handles=None, phone="",
                                      "quote": ", ".join(_hit["sites"])[:300]}],
                 })
 
-    if enable_search and level not in ("high", "med"):
+    if enable_search and (level not in ("high", "med") or _missing):
         queries = build_search_queries(name, name_given, name_family, org,
                                        occupation, location_city,
-                                       email=email, phone=phone)[:max_search_queries]
+                                       email=email, phone=phone,
+                                       missing_fields=result_missing
+                                       )[:max_search_queries]
         # The site: tier reached only LinkedIn and GitHub. These are the other
         # places a person with no address is actually indexed, and each one is
         # chosen from what the contact record already says rather than swept for
@@ -3789,6 +4795,20 @@ def research_person(name, email="", employer="", handles=None, phone="",
                     continue
                 seen_urls.add(u.rstrip("/").lower())
                 parsed = parse_profile_url(u)
+                # LinkedIn answers HTTP 999 to any server-side fetch, so the
+                # verification loop below can never open one of these pages.
+                # The search result's OWN title and snippet are the only text
+                # about that profile this pipeline will ever see, so they are
+                # captured here and handed to linkedin_tie(). Control-tested:
+                # the same queries with fabricated names against real employers
+                # returned zero results, so this text is the indexed page's, not
+                # the engine echoing the query back.
+                if linkedin_slug(u):
+                    result["linkedin_candidates"].append({
+                        "url": u,
+                        "context": ((h.get("title") or "") + " "
+                                    + (h.get("content") or "")),
+                        "source": "search", "found_on": q, "why": "search result"})
                 result["search_candidates"].append({
                     "candidate_id": f"SC{cid:03d}",
                     "query": q,
@@ -3813,7 +4833,7 @@ def research_person(name, email="", employer="", handles=None, phone="",
         # same corroboration standard applied to every other profile.
         verified_n = 0
         for cand in result["search_candidates"][:_verify_cap]:
-            title, body = fetch_page_text(cand["url"])
+            title, body, _craw = fetch_page_text(cand["url"], with_raw=True)
             if not (title or body):
                 continue
             hay = (title + " " + body)
@@ -3829,6 +4849,17 @@ def research_person(name, email="", employer="", handles=None, phone="",
             cand["verified"] = True
             cand["verified_by"] = ("full name on page" if named
                                    else "family name + employer on page")
+            # A page whose DOMAIN carries the contact's name is theirs, not just
+            # about them; anything else is mined only next to their name.
+            _clabel = re.sub(r"[^a-z]", "",
+                             _registrable_label(_host_of(cand["url"])) or "")
+            _nflat = re.sub(r"[^a-z]", "", fold_accents(name).lower())
+            _own = bool(_clabel) and bool(_nflat) and (
+                _clabel in _nflat or _nflat in _clabel)
+            _absorb_page(cand["url"], _craw, hay, first_party=_own,
+                         name_confirmed=True,
+                         why=("domain carries the contact's name" if _own
+                              else "page names the contact"))
             # Only an adjacency match counts as a full-name corroboration, since
             # that is what the level calculation reads.
             shared = 2 if named else min(shared, 1)
@@ -3897,8 +4928,9 @@ def research_person(name, email="", employer="", handles=None, phone="",
                     + _search_sites)
         if result["search_candidates"]:
             result["identity"]["reason"] = (
-                f"{reason}; {len(result['search_candidates'])} unverified "
-                "search candidate(s) returned — NOT promoted")
+                "%s; %d unverified search candidate(s) returned — NOT promoted"
+                % (result["identity"].get("reason") or reason,
+                   len(result["search_candidates"])))
 
     # ---- Enrichment fields — ONLY from corroborated or hand-entered profiles.
     if level in ("high", "med"):
@@ -3964,6 +4996,148 @@ def research_person(name, email="", employer="", handles=None, phone="",
         for _k, _v in enr.items():
             result["enrichment"][_k] = _v
 
+    # ---- LinkedIn: decide, once, across everything seen for this contact ----
+    # Every LinkedIn URL noticed anywhere above arrived here as a candidate. A
+    # URL is NOT evidence on its own -- the slug may be an opaque member id, and
+    # a name-shaped slug for a common name belongs to thousands of people, which
+    # is the namesake failure this pipeline has already suffered. LinkedIn also
+    # answers HTTP 999 to any server-side fetch, so the page can never be read
+    # to check. resolve_linkedin_candidates() therefore demands an INDEPENDENT
+    # tie and refuses outright when two different profiles both look tied.
+    try:
+        _li, _li_rej = resolve_linkedin_candidates(
+            result["linkedin_candidates"], name, name_given=name_given,
+            name_family=name_family, org=org, location_city=location_city)
+    except Exception as _e:  # noqa: BLE001
+        _li, _li_rej = None, []
+        result["tools"].append({
+            "tool_name": "linkedin_resolve", "invoked_at": _now(),
+            "input_type": "name", "input_value": name[:120],
+            "status": "error", "findings_count": 0, "error": str(_e)[:200]})
+    result["linkedin_rejected"] = _li_rej
+    if _li:
+        result["linkedin"] = _li
+        # JUSTIFICATION for reaching the write gate. The independent evidence is
+        # named per tie:
+        #   first_party  the contact published the URL on a page already proven
+        #                theirs (their own site, or the gravatar keyed on their
+        #                own address). Same grade as a hand-entered URL.
+        #   context      the indexed page text names the contact by adjacency
+        #                AND names their employer or city -- two facts from the
+        #                contact record confirmed by a source that is not the
+        #                slug. Control-tested against fabricated names.
+        #   slug         no independent tie; accepted only for a slug carrying a
+        #                full name that is rare on public frequency data, and
+        #                only when nothing else competed for this contact.
+        _tie_conf = {"first_party": 0.9, "context": 0.75, "slug": 0.6}
+        _independent = _li["tie"] in ("first_party", "context")
+        _writeable = _independent or (
+            _li["tie"] == "slug" and LINKEDIN_ACCEPT_SLUG_ONLY)
+        result["profiles"].append({
+            "site": "LinkedIn", "handle": _li["slug"], "url": _li["url"],
+            "fullname": "", "location": "", "bio": "", "blog_url": "",
+            "provenance": "linkedin_" + _li["tie"], "curated": False,
+            "kind": "profile", "handle_origin": _li.get("source", ""),
+            "linkedin_tie": _li["tie"], "linkedin_tie_reason": _li["reason"],
+            # A LinkedIn page cannot be fetched, so these do not record a name
+            # read off the profile; they record that an INDEPENDENT tie was
+            # established, which is what the consumer's gate is asking about.
+            "name_shared_tokens": 2 if _independent else 0,
+            "family_present": bool(_independent),
+        })
+        result["findings"].append({
+            "finding_id": "LI001",
+            "claim": ("LinkedIn profile tied to the contact (%s): %s — %s"
+                      % (_li["tie"], _li["url"], _li["reason"])),
+            "confidence": "high" if _li["tie"] == "first_party" else "med",
+            "source_refs": [{"url": _li["url"], "retrieved_at": _now(),
+                             "quote": _li["reason"][:300]}],
+        })
+        if _writeable and level in ("high", "med"):
+            result["enrichment"]["linkedin_url"] = _li["url"]
+            result["enrichment"]["linkedin_url_source"] = _li.get("found_on") or _li["url"]
+            result["enrichment"]["linkedin_url_confidence"] = _tie_conf[_li["tie"]]
+    for _r in _li_rej[:6]:
+        result["findings"].append({
+            "finding_id": "LIX%03d" % (len(result["findings"]) + 1),
+            "claim": ("UNVERIFIED CANDIDATE (LinkedIn URL not tied to the "
+                      "contact): %s — %s" % (_r["url"], _r["reason"])),
+            "confidence": "low", "unverified": True,
+            "source_refs": [{"url": _r["url"], "retrieved_at": _now(),
+                             "quote": _r["reason"][:300]}],
+        })
+
+    # ---- Mined field values -> enrichment ----------------------------------
+    # Same invariant as every other sourced field: nothing is promoted unless
+    # the contact's identity is corroborated. Within that, the value is chosen
+    # by HOW it was found, and two different values found the same way are a
+    # collision, so neither is taken -- the cheapest namesake detector there is.
+    def _pick(hits, key):
+        return pick_mined_value(hits, key)
+
+    if level in ("high", "med"):
+        if "phone" in _missing and not phone:
+            _p = _pick(result["mined"]["phones"], "phone")
+            # A number read out of prose next to a name is the weakest form here
+            # and is left as a candidate: on a shared page it may be a
+            # colleague's. Only an explicit telephone assertion is promoted.
+            if _p and _p["rank"] <= 2:
+                result["enrichment"].setdefault("phone", _p["value"])
+                result["enrichment"].setdefault(
+                    "phone_source", _p["source_url"] or "scout_page_mining")
+                result["enrichment"].setdefault(
+                    "phone_confidence", 0.85 if _p["rank"] == 0 else 0.7)
+                result["findings"].append({
+                    "finding_id": "MP001",
+                    "claim": ("Phone number published on a page confirmed to be "
+                              "the contact's (%s): %s" % (_p["how"], _p["value"])),
+                    "confidence": "high" if _p["rank"] == 0 else "med",
+                    "source_refs": [{"url": _p["source_url"],
+                                     "retrieved_at": _now(),
+                                     "quote": _p["value"]}],
+                })
+        if "email" in _missing and not email:
+            _e = _pick(result["mined"]["emails"], "email")
+            if _e:
+                _local = _e["value"].split("@")[0]
+                _name_toks = {t for t in normalize_name(name).split() if len(t) > 2}
+                _localish = bool(_name_toks & set(
+                    t for t in re.split(r"[^a-z]+", _local) if t))
+                # A mailto: on the contact's own page is the page saying "write
+                # to me here". Anything weaker has to look like THEIR address,
+                # not just an address that happens to sit on the page.
+                if _e["rank"] == 0 or _localish:
+                    result["enrichment"].setdefault("email", _e["value"])
+                    result["enrichment"].setdefault(
+                        "email_source", _e["source_url"] or "scout_page_mining")
+                    result["enrichment"].setdefault("email_confidence", 0.8)
+                    result["findings"].append({
+                        "finding_id": "ME001",
+                        "claim": ("Address published on a page confirmed to be "
+                                  "the contact's (%s): %s"
+                                  % (_e["how"], _e["value"])),
+                        "confidence": "med",
+                        "source_refs": [{"url": _e["source_url"],
+                                         "retrieved_at": _now(),
+                                         "quote": _e["value"]}],
+                    })
+        if "city" in _missing and not location_city:
+            _c = _pick(result["mined"]["cities"], "city")
+            if _c and _c["rank"] <= 2:
+                result["enrichment"].setdefault("location_city", _c["value"])
+                result["enrichment"].setdefault(
+                    "location_city_source", _c["source_url"] or "scout_page_mining")
+                result["enrichment"].setdefault("location_city_confidence", 0.7)
+        if "site" in _missing:
+            for _w in result["mined"]["websites"]:
+                _u = _w.get("website") or ""
+                if _u and _host_class(_host_of(_u)) == _HOST_RANK_PERSONAL:
+                    result["enrichment"].setdefault("website", _u)
+                    result["enrichment"].setdefault(
+                        "website_source", _w.get("source_url") or _u)
+                    result["enrichment"].setdefault("website_confidence", 0.75)
+                    break
+
     return result
 
 
@@ -4000,6 +5174,13 @@ def main():
                     help="do not add the per-contact site: queries")
     ap.add_argument("--no-user-scanner", action="store_true",
                     help="use holehe alone for account existence")
+    ap.add_argument("--missing", default="",
+                    help="comma-separated subset of %s that this contact still "
+                         "lacks; queries and techniques are aimed at these. "
+                         "Empty means 'assume all five are missing'."
+                         % ",".join(TARGET_FIELDS))
+    ap.add_argument("--no-github-user-search", action="store_true",
+                    help="do not look the contact up in GitHub's user search")
     ap.add_argument("--top-sites", type=int, default=300)
     ap.add_argument("--maigret-timeout", type=int, default=200)
     ap.add_argument("--json", action="store_true", help="emit JSON only")
@@ -4023,6 +5204,9 @@ def main():
         enable_github_emails=not a.no_github_emails,
         enable_targeted_site_search=not a.no_targeted_sites,
         enable_user_scanner=not a.no_user_scanner,
+        enable_github_user_search=not a.no_github_user_search,
+        missing_fields=([f.strip() for f in a.missing.split(",") if f.strip()]
+                        or None),
     )
     if a.json:
         print(json.dumps(res))
@@ -4063,6 +5247,16 @@ def main():
     for cand in res.get("email_candidates", []):
         print("email candidate: %s (registered on %s)" % (
             cand["email"], ", ".join(cand["sites"][:5])))
+    if res.get("linkedin"):
+        _l = res["linkedin"]
+        print("linkedin: %s  [tie=%s] %s" % (_l["url"], _l["tie"], _l["reason"]))
+    elif res.get("linkedin_candidates"):
+        print("linkedin: none accepted from %d candidate(s)"
+              % len(res["linkedin_candidates"]))
+    _m = res.get("mined") or {}
+    for _k in ("phones", "emails", "cities", "websites"):
+        for _hit in (_m.get(_k) or [])[:4]:
+            print("mined %s: %s" % (_k[:-1], _hit))
     if res.get("phone_intel"):
         _pi = res["phone_intel"]
         print("phone: %s %s %s %s" % (_pi.get("region_code", ""),
