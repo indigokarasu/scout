@@ -5057,6 +5057,11 @@ def research_person(name, email="", employer="", handles=None, phone="",
             result["enrichment"]["linkedin_url"] = _li["url"]
             result["enrichment"]["linkedin_url_source"] = _li.get("found_on") or _li["url"]
             result["enrichment"]["linkedin_url_confidence"] = _tie_conf[_li["tie"]]
+            # Which tie carried it, so the consumer can tell a profile
+            # corroborated by something outside the slug from one resting
+            # on the slug alone. They are not the same grade of evidence
+            # and must not be stored as though they were.
+            result["enrichment"]["linkedin_tie"] = _li["tie"]
     for _r in _li_rej[:6]:
         result["findings"].append({
             "finding_id": "LIX%03d" % (len(result["findings"]) + 1),
