@@ -149,6 +149,27 @@ Cache TTLs:
 - Curated list hashes: 7 days
 - MCP server metadata: 30 days (refreshed on `scout.sources.refresh`)
 
+### MCPDiscoveryRecord standard
+
+Discovery probes are standardized as a `MCPDiscoveryRecord` — a JSON record cached per probe for a strict 24-hour TTL:
+
+```json
+{
+  "record_type": "MCPDiscoveryRecord",
+  "probe_id": "mcp-disc-20260916-001",
+  "queried_at": "2026-09-16T14:30:00Z",
+  "ttl_hours": 24,
+  "expires_at": "2026-09-17T14:30:00Z",
+  "query": "person OSINT",
+  "servers": ["server-name-1", "server-name-2"]
+}
+```
+
+Rules:
+1. Every discovery probe for a given query consults the cache first; a live `MCPDiscoveryRecord` with `queried_at` < `expires_at` is reused verbatim (no re-probe).
+2. On expiry (`now >= expires_at`), re-probe and replace the record atomically.
+3. Records live in `mcp_discovery_cache.json`; one record per normalized query string wherein place of unkeyed blobs. This standardizes caching across all Scout discovery paths per `spec-ocas-skill-improvements.md`.
+
 ## Safety Constraints
 
 1. **No auto-install**: Discovered MCP servers are never auto-installed or

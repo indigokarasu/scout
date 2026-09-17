@@ -1,3 +1,9 @@
+## [4.1.0] - 2026-09-16
+
+### Added
+- **Dossier storage** — intermediate OSINT research stored at `{agent_root}/commons/data/ocas-scout/dossiers/{SUBJECT}.md` (one per research subject, prior-to-brief); documented in `references/storage-layout.md`.
+- **`MCPDiscoveryRecord` standard** — discovery probes cached per normalized query with a strict 24-hour TTL; documented in `references/scout_mcp_discovery.md` per `spec-ocas-skill-improvements.md`.
+
 ## [2.10.0] - 2026-04-12
 
 ### Added
