@@ -21,14 +21,15 @@ from __future__ import annotations
 import argparse
 import csv
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 # Allow running directly or as a module.
 sys.path.insert(0, str(Path(__file__).parent))
 from _normalize import (
+    name_tokens,
     normalize_aggressive,
     normalize_name,
-    token_overlap_ratio,
 )
 
 CONFIDENCE = {
@@ -137,27 +138,50 @@ def resolve(
                 _emit(out_rows, seen, "fuzzy", lrow, rrow, left_col, right_col)
 
     if not skip_overlap:
-        # Pass 3: token overlap (O(N*M) — expensive; allow opt-out).
+        # Pass 3: token overlap optimized via pre-tokenization and token inverted index.
+        # Precompute right row tokens and build an inverted index mapping token -> right row indices.
+        right_tokens = [name_tokens(rrow.get(right_col, "")) for rrow in right_rows]
+        token_to_r_indices: dict[str, list[int]] = defaultdict(list)
+        for r_idx, r_toks in enumerate(right_tokens):
+            for t in r_toks:
+                token_to_r_indices[t].append(r_idx)
+
         for lrow in left_rows:
             l_raw = lrow.get(left_col, "")
             if not normalize_name(l_raw):
                 continue
-            for rrow in right_rows:
-                ratio, shared = token_overlap_ratio(
-                    l_raw, rrow.get(right_col, "")
-                )
-                if ratio >= overlap_threshold and shared >= min_shared:
-                    _emit(
-                        out_rows,
-                        seen,
-                        "token_overlap",
-                        lrow,
-                        rrow,
-                        left_col,
-                        right_col,
-                        ratio=ratio,
-                        shared=shared,
-                    )
+            l_toks = name_tokens(l_raw)
+            if not l_toks:
+                continue
+
+            if min_shared > 0:
+                candidate_counts: dict[int, int] = defaultdict(int)
+                for t in l_toks:
+                    for r_idx in token_to_r_indices.get(t, []):
+                        candidate_counts[r_idx] += 1
+                cand_indices = sorted(candidate_counts.keys())
+            else:
+                candidate_counts = {}
+                cand_indices = list(range(len(right_rows)))
+
+            for r_idx in cand_indices:
+                r_toks = right_tokens[r_idx]
+                shared = candidate_counts.get(r_idx) if min_shared > 0 else len(l_toks & r_toks)
+                if shared is not None and shared >= min_shared:
+                    union_size = len(l_toks) + len(r_toks) - shared
+                    ratio = shared / union_size if union_size > 0 else 0.0
+                    if ratio >= overlap_threshold:
+                        _emit(
+                            out_rows,
+                            seen,
+                            "token_overlap",
+                            lrow,
+                            right_rows[r_idx],
+                            left_col,
+                            right_col,
+                            ratio=ratio,
+                            shared=shared,
+                        )
 
     fieldnames = [
         "match_type",

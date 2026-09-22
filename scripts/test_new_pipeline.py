@@ -3,9 +3,9 @@
 
 Run: python3 test_new_pipeline.py
 """
+import csv
 import os
 import sys
-import json
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -138,6 +138,65 @@ def test_reliability_empty():
     res = score([], min_n=1)
     assert res["labeled_observations"] == 0
     assert not res["tools"]
+
+# ── entity resolution: exact, fuzzy, and token_overlap match ─────
+
+def test_entity_resolution_matching():
+    from entity_resolution import resolve
+
+    left_rows = [
+        {"name": "John Alexander Smith"},   # Exact & token_overlap match with right_rows[0]
+        {"name": "Alice Williams"},         # Fuzzy match with right_rows[1] ("Williams Alice")
+        {"name": "Robert James Johnson"},   # Token overlap with right_rows[2] ("Robert Johnson")
+        {"name": "Unique Name Person"},     # No match
+    ]
+    right_rows = [
+        {"fullname": "John Alexander Smith"},
+        {"fullname": "Williams Alice"},
+        {"fullname": "Robert Johnson"},
+        {"fullname": "Unrelated Stranger"},
+    ]
+
+    with tempfile.NamedTemporaryFile("w", delete=False, suffix=".csv", newline="") as f_left, \
+         tempfile.NamedTemporaryFile("w", delete=False, suffix=".csv", newline="") as f_right, \
+         tempfile.NamedTemporaryFile("w", delete=False, suffix=".csv", newline="") as f_out:
+
+        writer_left = csv.DictWriter(f_left, fieldnames=["name"])
+        writer_left.writeheader()
+        writer_left.writerows(left_rows)
+        f_left.close()
+
+        writer_right = csv.DictWriter(f_right, fieldnames=["fullname"])
+        writer_right.writeheader()
+        writer_right.writerows(right_rows)
+        f_right.close()
+
+        out_path = f_out.name
+        f_out.close()
+
+        try:
+            count = resolve(
+                left_path=f_left.name,
+                left_col="name",
+                right_path=f_right.name,
+                right_col="fullname",
+                out_path=out_path,
+                overlap_threshold=0.5,
+                min_shared=2,
+            )
+            assert count >= 3
+
+            with open(out_path, newline="", encoding="utf-8") as fh:
+                matches = list(csv.DictReader(fh))
+
+            types = [m["match_type"] for m in matches]
+            assert "exact" in types
+            assert "fuzzy" in types
+            assert "token_overlap" in types
+        finally:
+            os.unlink(f_left.name)
+            os.unlink(f_right.name)
+            os.unlink(out_path)
 
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items())
