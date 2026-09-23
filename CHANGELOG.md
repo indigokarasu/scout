@@ -88,7 +88,7 @@
 ## [2.6.0] - 2026-04-02
 
 ### Added
-- `user_relevance` field on all emitted Elephas signals (default `agent_only` for research, `user` when user-requested)
+- `user_relevance` field on all emitted Chronicle signals (default `agent_only` for research, `user` when user-requested)
 - Structured entity observations in journal payloads (`entities_observed` with relevance tags)
 
 ## 2.5.0 — 2026-03-30

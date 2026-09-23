@@ -31,6 +31,9 @@ triggers:
 - entity resolution
 - provenance brief
 ---
+
+**Support files:** `references/support-file-map.md` indexes the bundled files not covered inline in this skill — check it before working from assumptions about what is (not) available.
+
 ## Interactive Menu
 
 When invoked interactively, present a two-level menu. See `references/interactive-menu.md` for the full menu structure.
@@ -46,7 +49,7 @@ When invoked interactively, present a two-level menu. See `references/interactiv
 
 - General topic research (use Sift)
 - Image processing (use Look)
-- Knowledge graph writes (use Elephas)
+- Knowledge graph writes (use Chronicle)
 - Social graph management (use Weave)
 
 # Scout
@@ -59,7 +62,7 @@ Scout integrates curated person-specific OSINT tools (theHarvester, Maigret, Hol
 
 Scout owns lawful OSINT research on people and organizations with provenance-backed output.
 
-Scout does not own: general topic research (Sift), image processing (Look), knowledge graph writes (Elephas), social graph (Weave), communications (Dispatch).
+Scout does not own: general topic research (Sift), image processing (Look), knowledge graph writes (Chronicle), social graph (Weave), communications (Dispatch).
 
 ## Ontology types
 
@@ -69,7 +72,7 @@ Scout works with these types from `spec-ocas-ontology.md`:
 - **Entity/AI** — AI agents or organizations when relevant to research.
 - **Thing/DigitalArtifact** — public documents, profiles, and digital records found during research.
 
-Scout emits Signals to Elephas after each completed research request, for each extracted entity with confidence >= med. Signal `payload.type` is `"Person"` or `"AI"`. `source_journal_type` is `"Research"`. Every emitted Signal must include a `user_relevance` field.
+Scout emits Signals to Chronicle after each completed research request, for each extracted entity with confidence >= med. Signal `payload.type` is `"Person"` or `"AI"`. `source_journal_type` is `"Research"`. Every emitted Signal must include a `user_relevance` field.
 
 ### user_relevance field
 
@@ -169,7 +172,7 @@ Read `references/scout_brief_template.md` for the full template.
 
 ## Inter-skill interfaces
 
-Scout writes Signal files to Elephas (via journal signal payload). One Signal per confirmed entity or high-confidence relationship. Use schema from `spec-ocas-shared-schemas.md`. Every Signal must include `user_relevance`. See `spec-ocas-interfaces.md` for signal format.
+Scout writes Signal files to Chronicle (via journal signal payload). One Signal per confirmed entity or high-confidence relationship. Use schema from `spec-ocas-shared-schemas.md`. Every Signal must include `user_relevance`. See `spec-ocas-interfaces.md` for signal format.
 
 ## Recovery Behavior
 
@@ -196,7 +199,7 @@ See `references/okrs.md` for skill OKR definitions.
 - **Sift** — web search during Tier 1; Sift-dork fallback when Sherlock unavailable
 - **Look** — reverse image search for person identification when photo available
 - **Weave** — read social graph for identity context before research (read-only)
-- **Elephas** — emit Signal files for Chronicle promotion
+- **Chronicle** — emit Signal files for Chronicle promotion
 - **native-mcp / mcporter** — connect to dynamically discovered MCP-wrapped OSINT servers
 - **RapidAPI** — structured social media enrichment via `rapidapi_call` (see RapidAPI Enrichment Workflow below)
 
@@ -241,7 +244,7 @@ Monitors: [awesome-osint-mcp-servers](https://github.com/soxoj/awesome-osint-mcp
 ## Gotchas
 
 - **Tier 3 sources require explicit permission** — Paid OSINT providers and background databases (Tier 3) cannot be queried without a recorded PermissionGrant. The skill will silently skip Tier 3 even if credentials are configured.
-- **User relevance defaults to `agent_only`** — Signals emitted to Elephas default to `user_relevance: "agent_only"` unless the user explicitly requested the research or the entity connects to a known `user` Chronicle entry. This means most Scout entities won't be promoted.
+- **User relevance defaults to `agent_only`** — Signals emitted to Chronicle default to `user_relevance: "agent_only"` unless the user explicitly requested the research or the entity connects to a known `user` Chronicle entry. This means most Scout entities won't be promoted.
 - **Hard cap at 2 Sherlock passes** — Recursive handle discovery is allowed for exactly 1 additional pass (2 total). Further recursion is silently blocked regardless of leads found.
 - **Identity gate requires 2+ data points** — A username match alone produces only `unverified_lead` status. Profiles are `verified` only when 2+ seed data points overlap (name + location, etc.).
 - **minimize_pii suppresses home addresses and personal details** — When the user sets `minimize_pii=true`, the final brief suppresses unnecessary sensitive details even if they were found during research. Re-run without the flag to see full data.

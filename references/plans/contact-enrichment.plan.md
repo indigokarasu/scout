@@ -73,10 +73,10 @@ steps:
 
 **Outputs:**
 - `research_report`: path to completed research report
-- `entity_signal_ids`: list of Signal IDs emitted to Elephas (via journal signal payload)
+- `entity_signal_ids`: list of Signal IDs emitted to Chronicle (via journal signal payload)
 
 **On failure:** abort
-**Notes:** Scout emits entity Signals to Elephas automatically during research.
+**Notes:** Scout emits entity Signals to Chronicle automatically during research.
 
 ---
 

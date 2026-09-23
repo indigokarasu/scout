@@ -120,7 +120,7 @@ For every RapidAPI call that returns data:
    - **high:** 3+ data points match (name + title + company, or name + location + handle)
    - **medium:** 2 data points match
    - **low:** 1 data point or username-only match
-4. Emit Signal to Elephas for confirmed entities
+4. Emit Signal to Chronicle for confirmed entities
 5. Include RapidAPI source reference in the brief's Source Log
 
 ## Rate Limiting & Error Handling
