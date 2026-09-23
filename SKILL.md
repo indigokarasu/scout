@@ -66,7 +66,7 @@ Scout does not own: general topic research (Sift), image processing (Look), know
 
 ## Ontology types
 
-Scout works with these types from `spec-ocas-ontology.md`:
+Scout works with these types from [[`spec-ocas-ontology.md` ⚠️ Pending spec] ⚠️ Pending spec — not yet authored]:
 
 - **Entity/Person** — people and their public profiles. The primary entity type Scout extracts.
 - **Entity/AI** — AI agents or organizations when relevant to research.
@@ -172,7 +172,7 @@ Read `references/scout_brief_template.md` for the full template.
 
 ## Inter-skill interfaces
 
-Scout writes Signal files to Chronicle (via journal signal payload). One Signal per confirmed entity or high-confidence relationship. Use schema from `spec-ocas-shared-schemas.md`. Every Signal must include `user_relevance`. See `spec-ocas-interfaces.md` for signal format.
+Scout writes Signal files to Chronicle (via journal signal payload). One Signal per confirmed entity or high-confidence relationship. Use schema from [[`spec-ocas-shared-schemas.md` ⚠️ Pending spec] ⚠️ Pending spec — not yet authored]. Every Signal must include `user_relevance`. See [[`spec-ocas-interfaces.md` ⚠️ Pending spec] ⚠️ Pending spec — not yet authored] for signal format.
 
 ## Recovery Behavior
 
