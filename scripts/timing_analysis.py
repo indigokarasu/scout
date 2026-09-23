@@ -16,6 +16,7 @@ Adapted from ShinMegamiBoson/OpenPlanter (MIT). Differences:
 from __future__ import annotations
 
 import argparse
+import bisect
 import csv
 import datetime as dt
 import json
@@ -44,9 +45,18 @@ def _read(path: str) -> list[dict[str, str]]:
         return list(csv.DictReader(fh))
 
 
-def _nearest_distance(donation_date: dt.date, awards: list[dt.date]) -> int:
-    """Absolute days to nearest award date."""
-    return min(abs((donation_date - a).days) for a in awards)
+def _nearest_distance(donation_date: dt.date, sorted_awards: list[dt.date]) -> int:
+    """Absolute days to nearest award date in a sorted list of award dates."""
+    if not sorted_awards:
+        return 0
+    idx = bisect.bisect_left(sorted_awards, donation_date)
+    if idx == 0:
+        return abs((donation_date - sorted_awards[0]).days)
+    if idx == len(sorted_awards):
+        return abs((donation_date - sorted_awards[-1]).days)
+    d1 = abs((donation_date - sorted_awards[idx - 1]).days)
+    d2 = abs((donation_date - sorted_awards[idx]).days)
+    return d1 if d1 < d2 else d2
 
 
 def _permute(
@@ -62,6 +72,7 @@ def _permute(
         date_min + dt.timedelta(days=rng.randint(0, span_days))
         for _ in range(awards_count)
     ]
+    rand_awards.sort()
     distances = [_nearest_distance(d, rand_awards) for d in donations]
     return statistics.mean(distances)
 
@@ -153,6 +164,7 @@ def analyze(
             skipped += 1
             continue
 
+        award_dates.sort()
         donation_dates = [d for (d, _) in records]
         observed = statistics.mean(
             _nearest_distance(d, award_dates) for d in donation_dates

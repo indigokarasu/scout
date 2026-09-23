@@ -87,6 +87,13 @@ _PERSONAL_SUFFIXES = {
 }
 
 
+_ACCENT_TRANS = str.maketrans({
+    "æ": "ae", "Æ": "AE", "ø": "o", "Ø": "O",
+    "ß": "ss", "đ": "d", "Đ": "D", "ł": "l", "Ł": "L",
+    "ı": "i", "œ": "oe", "Œ": "OE",
+})
+
+
 def fold_accents(text: str | None) -> str:
     """Base letters only: 'café' -> 'cafe', 'Straße' -> 'Strasse', 'naïve' -> 'naive'.
 
@@ -97,10 +104,7 @@ def fold_accents(text: str | None) -> str:
     """
     if not text:
         return ""
-    for a, b in (("æ", "ae"), ("Æ", "AE"), ("ø", "o"), ("Ø", "O"),
-                 ("ß", "ss"), ("đ", "d"), ("Đ", "D"), ("ł", "l"), ("Ł", "L"),
-                 ("ı", "i"), ("œ", "oe"), ("Œ", "OE")):
-        text = text.replace(a, b)
+    text = text.translate(_ACCENT_TRANS)
     decomposed = unicodedata.normalize("NFKD", text)
     return "".join(c for c in decomposed if not unicodedata.combining(c))
 
