@@ -1,23 +1,20 @@
 name: Repository discoverability bootstrap
 on:
+  workflow_dispatch:
   push:
-    branches: [main]
+    paths:
+      - .github/workflows/discoverability-bootstrap.yml
 permissions:
   contents: write
   issues: write
 
 jobs:
-  metadata:
+  discoverability:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
     steps:
-      - name: Repository description and topics
-        run: |
-          gh api --method PATCH "repos/$REPO" -f description='Scout: structured OSINT research — lawful people, company, and organization research with full provenance.'
-          gh api --method PUT "repos/$REPO/topics" -H "Accept: application/vnd.github+json" -F 'names[]=agent-skills' -F 'names[]=ai-agent' -F 'names[]=claude' -F 'names[]=intelligence' -F 'names[]=ocas' -F 'names[]=openclaw' -F 'names[]=osint' -F 'names[]=people-search' -F 'names[]=research'
-
       - name: Standard labels
         continue-on-error: true
         run: |
