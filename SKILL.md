@@ -114,7 +114,20 @@ Example input shape:
 
 ## Workflow
 
-Full step-by-step workflow, tool commands, handle-expansion logic, identity gating, and verification tiers are in `references/scout_schemas.md`. Phase checklist summarized there (Normalize → Tier 1 collection → Handle expansion → Email/phone tools → Public records → Entity resolution → Optional timing correlation → Dynamic MCP discovery → Compile → Brief → Emit & journal).
+Full step-by-step workflow, tool commands, handle-expansion logic, identity gating, and verification tiers are in `references/scout_schemas.md`.
+
+Phase checklist:
+- [ ] Normalize request and validate subject inputs
+- [ ] Run Tier 1 person tools + public web search in parallel
+- [ ] Expand handles with identity gate (2+ data points) and 2-pass recursion cap
+- [ ] Run email/phone tools as data is available
+- [ ] Run public-records investigation for company/org research or corporate ties
+- [ ] Resolve entities across sources (exact/fuzzy/token overlap)
+- [ ] Optionally run timing correlation
+- [ ] Discover MCP servers when Tier 1 + records are thin
+- [ ] Compile findings, assign confidence, escalate only as permitted
+- [ ] Render brief with provenance; surface near-miss profiles
+- [ ] Emit Signals and write journal
 
 ## Source waterfall
 
