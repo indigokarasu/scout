@@ -1,0 +1,17 @@
+# Scout Gotchas
+
+Full list of non-obvious issues and environment-specific facts for Scout. Read this before running Scout in a new environment or debugging a surprising result.
+
+- **Tier 3 sources require explicit permission** — Paid OSINT providers and background databases (Tier 3) cannot be queried without a recorded PermissionGrant. The skill will silently skip Tier 3 even if credentials are configured.
+- **User relevance defaults to `agent_only`** — Signals emitted to Chronicle default to `user_relevance: "agent_only"` unless the user explicitly requested the research or the entity connects to a known `user` Chronicle entry. This means most Scout entities won't be promoted.
+- **Hard cap at 2 Sherlock passes** — Recursive handle discovery is allowed for exactly 1 additional pass (2 total). Further recursion is silently blocked regardless of leads found.
+- **Identity gate requires 2+ data points** — A username match alone produces only `unverified_lead` status. Profiles are `verified` only when 2+ seed data points overlap (name + location, etc.).
+- **minimize_pii suppresses home addresses and personal details** — When the user sets `minimize_pii=true`, the final brief suppresses unnecessary sensitive details even if they were found during research. Re-run without the flag to see full data.
+- **"Not subscribed" ≠ broken on RapidAPI.** Many APIs return tools on `tools/list` but "You are not subscribed to this API" on actual calls. These are tier-gated by the provider, not broken. 3 genuinely broken LinkedIn APIs (linkedin-data-api, linkedin-api8, li-data-scraper) — provider shut down. 4 new ones work: fresh-linkedin-scraper-api (primary), linkedinscraper, linkedin-email-finder5, linkedin-lead-enrichment.
+- **`gh api` base64 content is unreliable for counting** — `gh api repos/<owner>/<repo>/readme --jq '.content' | base64 -d` can silently return truncated or empty results. For fetching raw GitHub README content, use `curl -s "https://raw.githubusercontent.com/<owner>/<repo>/<branch>/README.md"` instead. This returns clean text that `wc -l` and `grep` can process directly.
+- **Branch names vary across repos** — `jivoi/awesome-osint` uses `master` (not `main`). Always verify branch name with a quick `curl -s -o /dev/null -w "%{http_code}"` probe before fetching content.
+- **curl timeout for unreliable endpoints** — Some GitHub endpoints return 0 bytes under rate-limiting. Use `--max-time 15` and check HTTP status code before processing output.
+- **Public-records scripts use stdlib only** — All fetch scripts in `scripts/fetch_*.py` use Python stdlib only (no pip installs required). They use `urllib.request` with retry logic and respect `Retry-After` headers. 429 responses surface immediately with the upstream's quota message.
+- **Entity resolution is token-bag only** — `entity_resolution.py` does NOT use external fuzzy libraries (no rapidfuzz, no jellyfish). Token-bag matching is the upper bound. For Levenshtein, transliteration, or phonetic matching, pip-install separately.
+- **ICIJ offshore leaks cache** — First run downloads ~70 MB bulk CSV. Cached for 30 days under `$HERMES_OSINT_CACHE/icij/` (default: `~/.cache/hermes-osint/icij/`). Subsequent runs search the local cache.
+- **Statistical significance ≠ wrongdoing** — `timing_analysis.py` p < 0.05 means the timing pattern is unlikely under the null. It does not establish corruption. Always state this in the brief.

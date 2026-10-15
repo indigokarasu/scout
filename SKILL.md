@@ -1,7 +1,7 @@
 ---
-name: ocas-scout
-description: 'Structured OSINT research on people, companies, and organizations. Use for provenance-backed briefs, entity resolution across public sources, background research with cited sources, or free-first research workflows that escalate to paid sources only with explicit permission. Do not use for topic research without a person/org focus (use Sift) or illegal data collection.'
 license: MIT
+name: ocas-scout
+description: 'NOT for VPN/captcha or booking tasks. Structured OSINT research on people, companies, and organizations. Use for provenance-backed briefs, entity resolution across public sources, background research with cited sources, or free-first research workflows that escalate to paid sources only with explicit permission. Use Sift for topic research without a person/org focus. Never for illegal data collection. Guard front-loaded into the 57-char router window on 2026-10-15: a prior auto-load fired on a VPN/captcha question, and the existing "Do not use for..." exclusion sat at char 276 where the router cannot see it.'
 source: https://github.com/<agent-handle>/scout
 includes:
 - references/**
@@ -18,6 +18,26 @@ metadata:
     - companies
     - investigation
     - OCAS-core
+    config:
+    - key: SCOUT_SEARXNG_URL
+      description: Local SearXNG search endpoint used for Tier 1 web search.
+      default: http://127.0.0.1:8888/search
+    - key: SCOUT_OSINT_VENV
+      description: Directory containing OSINT tool binaries.
+      default: /root/.hermes/tools/osint-venv
+    - key: HERMES_OSINT_CACHE
+      description: Base cache directory for large OSINT datasets (e.g. ICIJ offshore leaks).
+      default: ~/.cache/hermes-osint
+    - key: HERMES_OSINT_UA
+      description: User-Agent override for Wikimedia policy compliance.
+    - key: SCOUT_GITHUB_TOKEN
+      description: GitHub token for source refresh and MCP discovery (optional).
+    - key: OPENCORPORATES_API_TOKEN
+      description: OpenCorporates API token (optional).
+    - key: COURTLISTENER_TOKEN
+      description: CourtListener API token (optional).
+    - key: SENATE_LDA_TOKEN
+      description: Senate lobbying disclosure API token (optional).
 tags:
 - OSINT
 - research
@@ -54,9 +74,7 @@ When invoked interactively, present a two-level menu. See `references/interactiv
 
 # Scout
 
-Scout conducts lawful OSINT research on people, companies, and organizations, assembling provenance-backed briefs where every claim carries a source reference, retrieval timestamp, and direct quote. It works through a tiered source waterfall — public web first, then rate-limited registries, then paid databases only with explicit permission — collecting no more than the stated research goal requires. This tiered approach exists because paid sources require explicit consent and rate-limited registries need careful quota management to avoid service degradation.
-
-Scout integrates curated person-specific OSINT tools (theHarvester, Maigret, Holehe, h8mail, PhoneInfoga, and others), a public-records investigation framework (SEC EDGAR, USAspending, Senate lobbying, OFAC sanctions, ICIJ offshore leaks, NYC property records, OpenCorporates, CourtListener, Wayback Machine, Wikipedia/Wikidata, GDELT), and dynamically discovers new MCP-wrapped OSINT servers at runtime.
+Lawful OSINT on people, companies, and organizations with provenance-backed briefs. Tiered source waterfall (public web → registries → paid with explicit permission) and minimization by research goal, because paid access requires consent and rate-limited registries require quota care. Integrates person-specific tools (theHarvester, Maigret, Holehe, h8mail, PhoneInfoga), public-records fetchers (SEC EDGAR, USAspending, OFAC, ICIJ, ACRIS, OpenCorporates, CourtListener, Wayback, GDELT), and dynamic MCP discovery.
 
 ## Responsibility boundary
 
@@ -66,40 +84,9 @@ Scout does not own: general topic research (Sift), image processing (Look), know
 
 ## Ontology types
 
-Scout works with these types from [[`spec-ocas-ontology.md` ⚠️ Pending spec] ⚠️ Pending spec — not yet authored]:
+Scout works with Entity/Person, Entity/AI, and Thing/DigitalArtifact (see [[spec-ocas-ontology.md]]). It emits Chronicle Signals (type `Person` or `AI`, `source_journal_type: Research`) with a mandatory `user_relevance` field defaulting to `agent_only` unless the user requested the research or the entity links to a `user` Chronicle entry. Full schema and signal shape: `references/scout_schemas.md`.
 
-- **Entity/Person** — people and their public profiles. The primary entity type Scout extracts.
-- **Entity/AI** — AI agents or organizations when relevant to research.
-- **Thing/DigitalArtifact** — public documents, profiles, and digital records found during research.
-
-Scout emits Signals to Chronicle after each completed research request, for each extracted entity with confidence >= med. Signal `payload.type` is `"Person"` or `"AI"`. `source_journal_type` is `"Research"`. Every emitted Signal must include a `user_relevance` field.
-
-### user_relevance field
-
-Every Signal emitted by Scout carries a `user_relevance` field:
-
-- `"user"` — the signal is relevant to the user's personal knowledge graph
-- `"agent_only"` — agent-initiated research with no demonstrated user connection
-
-**Default is `"agent_only"`**. A signal receives `user_relevance: "user"` only when: (1) the user explicitly requested the research, OR (2) the entity connects to a `user_relevance: "user"` Chronicle entry. When in doubt, default to `"agent_only"`.
-
-Signal example:
-```json
-{
-  "signal_id": "sig-scout-20260402-001",
-  "source_skill": "ocas-scout",
-  "source_journal_type": "Research",
-  "emitted_at": "2026-04-02T14:30:00Z",
-  "user_relevance": "agent_only",
-  "payload": {
-    "type": "Person",
-    "name": "Jane Doe",
-    "confidence": "high",
-    "source_refs": ["https://example.com/profile"]
-  }
-}
-```
-
+## Commands
 ## Commands
 
 - `scout.research.start` — begin a new research request with subject and goal
@@ -115,64 +102,45 @@ Signal example:
 
 ## Invariants
 
-1. Legality-first — only publicly available sources without bypassing access controls
-2. Minimization — collect only what the research goal requires
-3. Provenance for every claim — at least one source reference with URL, retrieval timestamp, and quote
-4. Paid sources require explicit permission — Tier 3 needs a recorded PermissionGrant
-5. No doxxing by default — private details suppressed unless explicitly permitted
-6. Uncertainty must be surfaced — incomplete identity resolution stated clearly
-7. Identity gate — a profile is `verified` only when 2+ seed data points overlap (name + location, etc.). Username match alone = `unverified_lead`; exclude from synthesis
-8. Tiered verification — Sherlock results: top 3 verified immediately, 2-3 sampled, remainder only on explicit request
-9. Recursion cap — recursive handle discovery allowed for 1 additional pass; hard cap at 2 Sherlock passes per request
-10. Person-first tooling — always run theHarvester and OpenSanctions for person research. Run Holehe, h8mail, PhoneInfoga, Ghunt when relevant input data is available.
+See `references/invariants.md` for the ten non-negotiable rules (legality, minimization, provenance, permission gate, no doxxing, surfacing uncertainty, identity gate, tiered verification, recursion cap, person-first tooling).
 
 ## Input contract
 
 ResearchRequest requires: request_id, as_of, subject (type, name, aliases, known_locations, known_handles, known_emails, known_phones), goal, constraints (time_budget_minutes, minimize_pii). Read `references/scout_schemas.md` for exact schema.
 
-## Research workflow
+Example input shape:
+```json
+{"request_id":"req-001","as_of":"2026-10-15T...Z","subject":{"type":"person","name":"Jane Doe"},"goal":"background","constraints":{"time_budget_minutes":30,"minimize_pii":true}}
+```
 
-Full step-by-step workflow with tool commands, handle expansion logic, identity gating, and verification tiers is in `references/scout_schemas.md`.
+## Workflow
 
-**Phase summary:**
-
-- [ ] **Normalize** — parse request, validate subject identity inputs
-- [ ] **Tier 1 collection** — run person-specific tools (theHarvester, OpenSanctions) and public web search in parallel
-- [ ] **Handle expansion** — extract handles, run Sherlock/Maigret, apply identity gate (inv 7), tiered verification (inv 8), recursion cap at 2 passes (inv 9)
-- [ ] **Email/phone tools** — run Holehe, h8mail, EmailRep, Ghunt (if Gmail), PhoneInfoga as data is available
-- [ ] **Public records investigation** — for company/org research or when person research reveals corporate ties, run public-records fetch scripts (SEC EDGAR, USAspending, Senate lobbying, OFAC sanctions, ICIJ offshore leaks, OpenCorporates, CourtListener, NYC ACRIS, Wayback Machine, Wikipedia/Wikidata, GDELT). See `references/scout_public_records.md` for source selection, execution order, and cross-reference keys.
-- [ ] **Entity resolution across sources** — normalize names, run `entity_resolution.py` to cross-link entities between public-records CSVs and person-tool findings. Three match tiers: exact (high), fuzzy (medium), token_overlap (low).
-- [ ] **Timing correlation (optional)** — run `timing_analysis.py` to test whether event time series (e.g., lobbying filings vs contract awards) cluster suspiciously. Permutation test, one-tailed p-value.
-- [ ] **Dynamic MCP discovery** — if Tier 1 + public records results are thin, discover and connect to MCP-wrapped OSINT servers
-- [ ] **Compile** — record provenance, assign confidence, escalate to Tier 2/3 only as permitted
-- [ ] **Brief** — render markdown brief (see Output requirements). Near-match profiles surfaced explicitly, not discarded.
-- [ ] **Emit & journal** — store findings, emit Signal files per confirmed entity (with `user_relevance`), write journal via `scout.journal`
-
-When `minimize_pii=true`, suppress unnecessary sensitive details in the final brief.
+Full step-by-step workflow, tool commands, handle-expansion logic, identity gating, and verification tiers are in `references/scout_schemas.md`. Phase checklist summarized there (Normalize → Tier 1 collection → Handle expansion → Email/phone tools → Public records → Entity resolution → Optional timing correlation → Dynamic MCP discovery → Compile → Brief → Emit & journal).
 
 ## Source waterfall
 
-Read `references/scout_source_waterfall.md` for full tier logic.
-
-- **Tier 1 — Person-specific tools** — theHarvester, OpenSanctions, Sherlock, Maigret, Holehe, h8mail, EmailRep, Ghunt, PhoneInfoga. See `references/scout_person_sources.md` for full list and execution order.
-- **Web + platform search** — public web via SearchX (local SearXNG), including Twitter/X, Reddit, LinkedIn, GitHub. Always runs.
-- **Tier 1.5 — Public records** — SEC EDGAR, USAspending, Senate lobbying (LD-1/LD-2), OFAC SDN sanctions, ICIJ offshore leaks, NYC property records (ACRIS), OpenCorporates, CourtListener, Wayback Machine, Wikipedia/Wikidata, GDELT. Python stdlib-only fetch scripts. Runs for company/org research or when person research reveals corporate ties. See `references/scout_public_records.md`.
-- **Tier 2** — rate-limited sources, registries, MCP-discovered servers. Only if enabled and useful.
-- **Tier 3** — paid OSINT providers, background databases. Requires explicit permission grant.
+Tiers and source selection: `references/scout_source_waterfall.md`, `references/scout_person_sources.md`, `references/scout_public_records.md`. Tier 1 (person tools + web) always runs; Tier 1.5 public records for company/org research or when corporate ties surface; Tier 2-3 only when enabled/permitted.
 
 ## Output requirements
 
-Markdown brief: Executive Summary, Identity Resolution Notes, Findings, Social Graph (if handles found), Digital Footprint (if email/phone tools ran), Public Records (if public-records investigation ran), Risk and Uncertainty, Source Log. Every finding carries source-backed provenance.
-
-- **Social Graph**: verified profiles (platform, URL, discovery method, verification evidence) + unverified leads separately. Omit if no handles found.
-- **Digital Footprint**: email accounts (Holehe), breaches (h8mail/HIBP), Google data (Ghunt), phone metadata (PhoneInfoga), email risk (EmailRep), dark web (OnionClaw). Omit if no data available.
-- **Public Records**: corporate filings (SEC EDGAR), government contracts (USAspending), lobbying disclosures (Senate LD-1/LD-2), sanctions (OFAC SDN), offshore leaks (ICIJ), property records (NYC ACRIS), corporate registry (OpenCorporates), court records (CourtListener), web archives (Wayback), knowledge base (Wikipedia/Wikidata), news monitoring (GDELT). Omit if no public-records investigation was run.
-
-Read `references/scout_brief_template.md` for the full template.
+Markdown brief per `references/scout_brief_template.md` (Executive Summary, Identity Resolution Notes, Findings, Social Graph, Digital Footprint, Public Records, Risk and Uncertainty, Source Log). Omit empty subsections; every finding must carry source-backed provenance.
 
 ## Inter-skill interfaces
 
 Scout writes Signal files to Chronicle (via journal signal payload). One Signal per confirmed entity or high-confidence relationship. Use schema from [[`spec-ocas-shared-schemas.md` ⚠️ Pending spec] ⚠️ Pending spec — not yet authored]. Every Signal must include `user_relevance`. See [[`spec-ocas-interfaces.md` ⚠️ Pending spec] ⚠️ Pending spec — not yet authored] for signal format.
+
+## Error Handling
+
+| Failure | Symptom | Handling |
+|---|---|---|
+| A bundled fetch script exits non-zero (e.g. 429/403) | stderr diagnostic, exit code 2-4 | Log `degraded: <tool>` and continue with remaining sources |
+| SearXNG unreachable | Connection refused / timeout | Retry up to 3 times; if still down, skip web search and note gap in brief |
+| ICIJ bulk CSV missing or corrupt | Cache load raises IOError | Re-download once; on second failure, skip ICIJ and record `degraded` |
+| No profile candidate above identity threshold | Identity gate unresolved | Report `unverified_lead` results explicitly; do not promote to synthesis |
+| RapidAPI returns “not subscribed” | 403 with subscription error | Treat as tier-gated, not broken; skip provider and try alternates |
+| Tool not installed in OSINT venv | `ModuleNotFoundError` | Log degraded tool; continue; surface install hint in brief footer |
+| Tier 3 requested without PermissionGrant | Permission check fails | Skip Tier 3 silently and note in brief that it was withheld |
+| Recursive handle expansion exceeds cap | Second Sherlock pass completed | Block further recursion hard; fold settled leads into report |
 
 ## Recovery Behavior
 
@@ -243,24 +211,13 @@ Monitors: [awesome-osint-mcp-servers](https://github.com/soxoj/awesome-osint-mcp
 
 ## Gotchas
 
-- **Tier 3 sources require explicit permission** — Paid OSINT providers and background databases (Tier 3) cannot be queried without a recorded PermissionGrant. The skill will silently skip Tier 3 even if credentials are configured.
-- **User relevance defaults to `agent_only`** — Signals emitted to Chronicle default to `user_relevance: "agent_only"` unless the user explicitly requested the research or the entity connects to a known `user` Chronicle entry. This means most Scout entities won't be promoted.
-- **Hard cap at 2 Sherlock passes** — Recursive handle discovery is allowed for exactly 1 additional pass (2 total). Further recursion is silently blocked regardless of leads found.
-- **Identity gate requires 2+ data points** — A username match alone produces only `unverified_lead` status. Profiles are `verified` only when 2+ seed data points overlap (name + location, etc.).
-- **minimize_pii suppresses home addresses and personal details** — When the user sets `minimize_pii=true`, the final brief suppresses unnecessary sensitive details even if they were found during research. Re-run without the flag to see full data.
-- **"Not subscribed" ≠ broken on RapidAPI.** Many APIs return tools on `tools/list` but "You are not subscribed to this API" on actual calls. These are tier-gated by the provider, not broken. 3 genuinely broken LinkedIn APIs (linkedin-data-api, linkedin-api8, li-data-scraper) — provider shut down. 4 new ones work: fresh-linkedin-scraper-api (primary), linkedinscraper, linkedin-email-finder5, linkedin-lead-enrichment.
-- **`gh api` base64 content is unreliable for counting** — `gh api repos/<owner>/<repo>/readme --jq '.content' | base64 -d` can silently return truncated or empty results. For fetching raw GitHub README content, use `curl -s "https://raw.githubusercontent.com/<owner>/<repo>/<branch>/README.md"` instead. This returns clean text that `wc -l` and `grep` can process directly.
-- **Branch names vary across repos** — `jivoi/awesome-osint` uses `master` (not `main`). Always verify branch name with a quick `curl -s -o /dev/null -w "%{http_code}"` probe before fetching content.
-- **curl timeout for unreliable endpoints** — Some GitHub endpoints return 0 bytes under rate-limiting. Use `--max-time 15` and check HTTP status code before processing output.
-- **Public-records scripts use stdlib only** — All fetch scripts in `scripts/fetch_*.py` use Python stdlib only (no pip installs required). They use `urllib.request` with retry logic and respect `Retry-After` headers. 429 responses surface immediately with the upstream's quota message.
-- **Entity resolution is token-bag only** — `entity_resolution.py` does NOT use external fuzzy libraries (no rapidfuzz, no jellyfish). Token-bag matching is the upper bound. For Levenshtein, transliteration, or phonetic matching, pip-install separately.
-- **ICIJ offshore leaks cache** — First run downloads ~70 MB bulk CSV. Cached for 30 days under `$HERMES_OSINT_CACHE/icij/` (default: `~/.cache/hermes-osint/icij/`). Subsequent runs search the local cache.
-- **Statistical significance ≠ wrongdoing** — `timing_analysis.py` p < 0.05 means the timing pattern is unlikely under the null. It does not establish corruption. Always state this in the brief.
+See `references/gotchas.md` for the full list (Tier 3 permission, user_relevance default, Sherlock cap, identity gate, minimize_pii, RapidAPI, ICIJ cache, statistical-significance caveat, etc.).
 
 ## Support File Map
 
 | File | When to read |
 |---|---|
+| `references/support-file-map.md` | When adding or verifying bundled files; consult before assuming a tool is absent |
 | `references/scout_schemas.md` | Before requests/findings/briefs; full workflow steps |
 | `references/scout_config.md` | Default config.json and field descriptions |
 | `references/scout_source_waterfall.md` | Before tier selection or escalation |

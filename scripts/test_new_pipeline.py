@@ -216,3 +216,10 @@ if __name__ == "__main__":
             failed += 1
     print(f"\n{passed} passed, {failed} failed")
     sys.exit(1 if failed else 0)
+
+
+if __name__ == "__main__":
+    import sys
+    if "--help" in sys.argv or "-h" in sys.argv:
+        print("Usage: python3 " + __file__.split('/')[-1] + " (run via pytest; no CLI options)")
+        sys.exit(0)

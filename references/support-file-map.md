@@ -2,21 +2,22 @@
 
 One line per bundled file that SKILL.md does not cover inline. Read entries relevant to your task before assuming a file or tool does not exist.
 
-| File | Notes |
-|------|-------|
-| `references/correlation_and_expansion.md` | Scout: Cross-Site Correlation, Recursive Expansion & Domain Verification |
-| `references/plans/contact-enrichment.plan.md` | --- |
-| `references/profile_extraction.md` | Scout Person Research: Profile Extraction |
-| `references/source_reliability.md` | Scout Source Reliability |
-| `scripts/_envelope.py` | Shared JSON envelope + output-format helper for Scout scripts (stdlib-only). Two conventions applied across... |
-| `scripts/_http.py` | Tiny stdlib HTTP helper used by fetch_*.py scripts. Provides polite retry + JSON convenience + User-Agent e... |
-| `scripts/_normalize.py` | Shared entity-name normalization helpers (stdlib-only). Used by entity_resolution.py and timing_analysis.py. |
-| `scripts/correlate_profiles.py` | Cross-site profile correlation (stdlib-only; Pillow optional). Clusters Found/Maybe profiles that look like... |
-| `scripts/domain_check.py` | Domain availability check for a username (stdlib-only). Tests ``<username>.<tld>`` across common TLDs: DNS ... |
-| `scripts/profile_extract.py` | Structured profile extraction from a page (stdlib-only). Turns a profile page into an ENTITY record — displ... |
-| `scripts/recurse_expand.py` | Recursive handle expansion from found profiles (stdlib-only). Mines linked usernames out of profile bios an... |
-| `scripts/research_person.py` |  |
-| `scripts/source_reliability.py` | Source reliability scoring for Scout tools (stdlib-only). Computes precision / recall / F1 / false-positive... |
-| `scripts/test_name_tokens.py` | Regression tests for the min_len=4 defect in name_tokens. Root cause: name tokens shorter than 4 chars were... |
-| `scripts/test_new_pipeline.py` | Regression tests for the Aliens Eye integration scripts. Run: python3 test_new_pipeline.py |
-| `scripts/update.sh` |  |
+| File | When to read |
+|------|--------------|
+| `references/correlation_and_expansion.md` | When correlating entities across sources; during Phase 5 resolution |
+| `references/profile_extraction.md` | When extracting structured profiles from pages; during Phase 2-3 |
+| `references/source_reliability.md` | When scoring source quality; before final brief confidence assignment |
+| `references/support-file-map.md` | When verifying bundled files or assuming a tool is absent |
+| `scripts/_envelope.py` | When emitting JSON envelopes; before modifying script output |
+| `scripts/_http.py` | When fetch scripts need polite retry/HTTP; during any HTTP fetch failure |
+| `scripts/_normalize.py` | When normalizing entity names; before changing token logic |
+| `scripts/correlate_profiles.py` | When cross-linking profiles across sites; Phase 5 resolution |
+| `scripts/domain_check.py` | When checking username domain availability; handle expansion |
+| `scripts/profile_extract.py` | When turning a profile page into an ENTITY record; Phase 3-4 |
+| `scripts/recurse_expand.py` | When expanding handles recursively; subject to the 2-pass cap |
+| `scripts/research_person.py` | When running the flagship person research pipeline; at start of person research |
+| `scripts/source_reliability.py` | When computing precision/recall/F1; final brief scoring |
+| `scripts/test_name_tokens.py` | When regressing name-token matching; before changing _normalize |
+| `scripts/test_new_pipeline.py` | When validating the Aliens Eye / new pipeline integration |
+| `scripts/update.sh` | Before running scout.update; when debugging self-update |
+| `references/plans/contact-enrichment.plan.md` | When working the contact-enrichment roadmap |

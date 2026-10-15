@@ -95,3 +95,10 @@ if __name__ == "__main__":
             print(f"ERROR {n}: {type(e).__name__}: {e}")
     print(f"\n{len(tests)-failed}/{len(tests)} passed")
     sys.exit(1 if failed else 0)
+
+
+if __name__ == "__main__":
+    import sys
+    if "--help" in sys.argv or "-h" in sys.argv:
+        print("Usage: python3 " + __file__.split('/')[-1] + " (run via pytest; no CLI options)")
+        sys.exit(0)
