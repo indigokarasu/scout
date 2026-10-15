@@ -87,7 +87,6 @@ Scout does not own: general topic research (Sift), image processing (Look), know
 Scout works with Entity/Person, Entity/AI, and Thing/DigitalArtifact (see [[spec-ocas-ontology.md]]). It emits Chronicle Signals (type `Person` or `AI`, `source_journal_type: Research`) with a mandatory `user_relevance` field defaulting to `agent_only` unless the user requested the research or the entity links to a `user` Chronicle entry. Full schema and signal shape: `references/scout_schemas.md`.
 
 ## Commands
-## Commands
 
 - `scout.research.start` — begin a new research request with subject and goal
 - `scout.research.expand --tier <1|2|3>` — escalate to a higher source tier
