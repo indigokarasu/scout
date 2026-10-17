@@ -198,6 +198,127 @@ def test_entity_resolution_matching():
             os.unlink(f_right.name)
             os.unlink(out_path)
 
+
+# ── research_person: bounded ID-recursion sweeps maigret's other IDs ──
+
+def test_recursion_sweeps_discovered_other_ids():
+    """A username maigret reports as an 'other ID' is swept, and its profile
+    still has to pass the same name-corroboration gate."""
+    import research_person as R
+
+    calls = []
+    real = R.run_maigret
+
+    def fake(handle, timeout=200, top_sites=300):
+        calls.append(handle)
+        if handle == "seedhandle":
+            return ({"Example": {"url": "https://example.com/seedhandle",
+                                 "fullname": "Wrong Person", "location": "",
+                                 "bio": "", "blog_url": ""}},
+                    {"tool_name": "maigret", "invoked_at": "", "input_type": "handle",
+                     "input_value": handle, "status": "success",
+                     "findings_count": 1, "error": None,
+                     "other_ids": ["realname77", "seedhandle"]})
+        if handle == "realname77":
+            return ({"Portfolio": {"url": "https://portfolio.example/realname77",
+                                   "fullname": "Rhea Ott", "location": "",
+                                   "bio": "", "blog_url": ""}},
+                    {"tool_name": "maigret", "invoked_at": "", "input_type": "handle",
+                     "input_value": handle, "status": "success",
+                     "findings_count": 1, "error": None, "other_ids": []})
+        return ({}, {"tool_name": "maigret", "invoked_at": "", "input_type": "handle",
+                     "input_value": handle, "status": "success",
+                     "findings_count": 0, "error": None, "other_ids": []})
+
+    R.run_maigret = fake
+    try:
+        res = R.research_person(
+            "Rhea Ott", handles=["seedhandle"],
+            enable_search=False, enable_whois=False,
+            enable_email_permutation=False, enable_company_domain=False,
+            enable_company_pages=False, enable_github_emails=False,
+            enable_targeted_site_search=False, enable_user_scanner=False,
+            enable_github_user_search=False,
+        )
+    finally:
+        R.run_maigret = real
+
+    assert "realname77" in calls, "the discovered other ID must be swept"
+    assert "seedhandle" not in res["recursive_handles"], \
+        "a handle already swept must not be re-swept"
+    assert res["recursive_handles"] == ["realname77"], res["recursive_handles"]
+    # The recursive profile names the contact, so it corroborates — proving the
+    # pivot's output faces the same gate as any other profile.
+    assert "Portfolio" in res["identity"]["corroborating_sites"], \
+        res["identity"]["corroborating_sites"]
+
+
+def test_recursion_capped_and_skips_bare_names():
+    """The pivot is capped, and a discovered bare name part is not swept."""
+    import research_person as R
+
+    calls = []
+    real = R.run_maigret
+
+    def fake(handle, timeout=200, top_sites=300):
+        calls.append(handle)
+        if handle == "seedhandle":
+            return ({}, {"tool_name": "maigret", "invoked_at": "",
+                         "input_type": "handle", "input_value": handle,
+                         "status": "success", "findings_count": 0, "error": None,
+                         "other_ids": ["ott", "aaa111", "bbb222", "ccc333"]})
+        return ({}, {"tool_name": "maigret", "invoked_at": "", "input_type": "handle",
+                     "input_value": handle, "status": "success",
+                     "findings_count": 0, "error": None, "other_ids": []})
+
+    R.run_maigret = fake
+    try:
+        res = R.research_person(
+            "Rhea Ott", handles=["seedhandle"],
+            enable_search=False, enable_whois=False,
+            enable_email_permutation=False, enable_company_domain=False,
+            enable_company_pages=False, enable_github_emails=False,
+            enable_targeted_site_search=False, enable_user_scanner=False,
+            enable_github_user_search=False,
+        )
+    finally:
+        R.run_maigret = real
+
+    assert "ott" not in res["recursive_handles"], "a bare surname must not be swept"
+    assert len(res["recursive_handles"]) == R.MAX_RECURSIVE_HANDLES, \
+        res["recursive_handles"]
+
+
+def test_recursion_disabled_when_asked():
+    import research_person as R
+
+    calls = []
+    real = R.run_maigret
+
+    def fake(handle, timeout=200, top_sites=300):
+        calls.append(handle)
+        return ({}, {"tool_name": "maigret", "invoked_at": "", "input_type": "handle",
+                     "input_value": handle, "status": "success",
+                     "findings_count": 0, "error": None,
+                     "other_ids": ["realname77"]})
+
+    R.run_maigret = fake
+    try:
+        res = R.research_person(
+            "Rhea Ott", handles=["seedhandle"], enable_recursion=False,
+            enable_search=False, enable_whois=False,
+            enable_email_permutation=False, enable_company_domain=False,
+            enable_company_pages=False, enable_github_emails=False,
+            enable_targeted_site_search=False, enable_user_scanner=False,
+            enable_github_user_search=False,
+        )
+    finally:
+        R.run_maigret = real
+
+    assert res["recursive_handles"] == []
+    assert "realname77" not in calls
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items())
              if k.startswith("test_")]

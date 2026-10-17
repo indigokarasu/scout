@@ -168,6 +168,11 @@ MAX_SEARCH_QUERIES = 3
 MAX_SEARCH_CANDIDATES = 12
 MAX_SEARCH_VERIFY = 6   # candidates actually fetched and name-checked
 MAX_MAIGRET_HANDLES = 3
+# Usernames maigret discovered on the profiles it opened ("other IDs") are
+# swept as extra candidates. Each costs a full sweep, so the cap is small: the
+# pivot's whole value is that a second, differently-spelled handle may carry a
+# profile the first one did not, and one extra sweep captures most of that.
+MAX_RECURSIVE_HANDLES = 2
 # Each permutation costs a full holehe run, so the cheap shapes only.
 MAX_EMAIL_PERMUTATIONS = 3
 
@@ -189,6 +194,11 @@ _PRONOUN_RE = re.compile(
 )
 
 _TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+
+# maigret prints the aggregate pivot set it extracted from the profiles it
+# opened ("Found target's other IDs: a, b"). --no-recursion stops maigret USING
+# them, not printing them, so scout harvests the line to run the pivot itself.
+_OTHER_IDS_RE = re.compile(r"Found target'?s other IDs?:?\s*(.+)", re.IGNORECASE)
 
 # --------------------------------------------------------------------------
 # Profile-URL parsing
@@ -467,10 +477,16 @@ def _run(cmd, timeout):
 
 def run_maigret(handle, timeout=200, top_sites=300):
     """Return {site_name: {url, fullname, location, bio, blog_url}} for CLAIMED
-    profiles of `handle`. Second value is a PersonToolRecord."""
+    profiles of `handle`. Second value is a PersonToolRecord.
+
+    The record also carries ``other_ids`` — the distinct usernames maigret's
+    socid_extractor saw on the profiles it opened. Maigret's own recursion is
+    disabled (``--no-recursion``) so scout runs the pivot itself, under the same
+    corroboration gate and a hard cap, rather than letting it multiply sweeps.
+    """
     rec = {"tool_name": "maigret", "invoked_at": _now(), "input_type": "handle",
            "input_value": handle, "status": "error", "findings_count": 0,
-           "error": None}
+           "error": None, "other_ids": []}
     if not Path(MAIGRET_BIN).exists():
         rec["status"] = "not_installed"
         rec["error"] = f"{MAIGRET_BIN} missing"
@@ -495,6 +511,7 @@ def run_maigret(handle, timeout=200, top_sites=300):
         return {}, rec
 
     profiles = {}
+    other_ids = []
     for site, info in data.items():
         st = info.get("status")
         if not isinstance(st, dict) or st.get("status") != "Claimed":
@@ -507,6 +524,28 @@ def run_maigret(handle, timeout=200, top_sites=300):
             "bio": (ids.get("bio") or "").strip(),
             "blog_url": (ids.get("blog_url") or ids.get("url") or "").strip(),
         }
+        # A claimed profile frequently reports a DIFFERENT username for the same
+        # account (sites expose 'username', 'twitch_username', 'login', ...).
+        # Those are exactly the pivots maigret's recursion would follow.
+        for _k, _v in ids.items():
+            if not isinstance(_v, str):
+                continue
+            if (_k == "username" or _k.endswith("_username")
+                    or _k in ("login", "handle", "nickname")):
+                _v = _v.strip().strip(".,")
+                if _v and _v not in other_ids:
+                    other_ids.append(_v)
+    # maigret prints the aggregate pivot set on stdout; --no-recursion suppresses
+    # USING it, not the line itself. Tokens arrive comma-separated and the last
+    # one carries the sentence's full stop, so strip trailing punctuation.
+    for line in (_out or "").splitlines():
+        m = _OTHER_IDS_RE.search(line)
+        if m:
+            for tok in m.group(1).split(","):
+                tok = tok.strip().strip(".,")
+                if tok and tok not in other_ids:
+                    other_ids.append(tok)
+    rec["other_ids"] = other_ids
     rec["status"] = "success"
     rec["findings_count"] = len(profiles)
     return profiles, rec
@@ -3704,7 +3743,8 @@ def research_person(name, email="", employer="", handles=None, phone="",
                     enable_company_domain=True, org_domain="", peer_emails=None,
                     enable_company_pages=True, enable_github_emails=True,
                     enable_targeted_site_search=True, enable_user_scanner=True,
-                    missing_fields=None, enable_github_user_search=True):
+                    missing_fields=None, enable_github_user_search=True,
+                    enable_recursion=True):
     """Run the Tier-1 person pipeline. Returns a structured research result.
 
     The first seven parameters keep their original positional order so existing
@@ -4044,6 +4084,61 @@ def research_person(name, email="", employer="", handles=None, phone="",
                         prof[k] = gh[k]
             all_profiles.setdefault(site, prof)
 
+    # ---- Bounded ID-recursion. maigret extracts the usernames it sees on the
+    # profiles it opens ("other IDs") but --no-recursion leaves them unused.
+    # Sweeping them is the biggest coverage lever a username tool has: the seed
+    # handle and the account's real handle often differ by a character or a
+    # suffix ('soxoj' -> 'sox0j'), and the second spelling can carry a profile
+    # the first did not. Scout runs the pivot itself so every new sweep faces
+    # the same corroboration gate, and caps it so it cannot multiply sweeps.
+    recursive_handles = []
+    recursive_origin = {}
+    if enable_recursion:
+        _already = {h.lower() for h in maigret_handles}
+        for _rec in result["tools"]:
+            if _rec.get("tool_name") != "maigret":
+                continue
+            _seed_handle = _rec.get("input_value") or ""
+            # A pivot taken from a handle MANUFACTURED from the contact's own name
+            # is not an independent anchor: the whole chain rests on the name
+            # match that made the seed circular, so the discovered handle inherits
+            # it and its name agreement is not evidence either.
+            _seed_circular = (handle_origin.get(_seed_handle) == "name"
+                              or _seed_handle in _bare)
+            for _cand in _rec.get("other_ids") or []:
+                if len(recursive_handles) >= MAX_RECURSIVE_HANDLES:
+                    break
+                _cand = (_cand or "").strip()
+                if not _handle_ok(_cand) or _cand.lower() in _already:
+                    continue
+                if _handle_is_bare_name_part(_cand, name, name_given, name_family):
+                    continue
+                _already.add(_cand.lower())
+                recursive_handles.append(_cand)
+                recursive_origin[_cand] = ("maigret_id_circular" if _seed_circular
+                                           else "maigret_id")
+        for handle in recursive_handles:
+            profiles, rec = run_maigret(handle, timeout=maigret_timeout,
+                                        top_sites=top_sites)
+            rec["input_type"] = "handle_recursive"
+            result["tools"].append(rec)
+            for site, prof in profiles.items():
+                prof["site"] = site
+                prof["handle"] = handle
+                prof["provenance"] = "maigret"
+                prof["curated"] = False
+                prof["kind"] = "profile"
+                # Discovered ON a profile. Independent only when the seed it came
+                # from was independent — the name gate below enforces that.
+                prof["handle_origin"] = recursive_origin.get(handle, "maigret_id")
+                if site.lower() == "github":
+                    gh = github_api_fields(handle)
+                    for k in ("fullname", "org", "location", "blog_url", "bio"):
+                        if gh.get(k) and not prof.get(k):
+                            prof[k] = gh[k]
+                all_profiles.setdefault(site, prof)
+    result["recursive_handles"] = recursive_handles
+
     if not maigret_handles:
         result["identity"]["reason"] = "no distinctive handle to anchor on"
 
@@ -4060,7 +4155,7 @@ def research_person(name, email="", employer="", handles=None, phone="",
         # on name_shared_tokens / family_present) and keep the raw measurement
         # under *_raw for audit.
         _is_maigret = prof.get("provenance") == "maigret"
-        if _is_maigret and prof.get("handle_origin") == "name":
+        if _is_maigret and prof.get("handle_origin") in ("name", "maigret_id_circular"):
             prof["circular_anchor"] = True
             prof["name_shared_tokens_raw"] = shared
             prof["family_present_raw"] = fam
@@ -5186,6 +5281,9 @@ def main():
                          % ",".join(TARGET_FIELDS))
     ap.add_argument("--no-github-user-search", action="store_true",
                     help="do not look the contact up in GitHub's user search")
+    ap.add_argument("--no-recursion", action="store_true",
+                    help="do not sweep the alternate usernames maigret discovers "
+                         "on the profiles it opens")
     ap.add_argument("--top-sites", type=int, default=300)
     ap.add_argument("--maigret-timeout", type=int, default=200)
     ap.add_argument("--json", action="store_true", help="emit JSON only")
@@ -5210,6 +5308,7 @@ def main():
         enable_targeted_site_search=not a.no_targeted_sites,
         enable_user_scanner=not a.no_user_scanner,
         enable_github_user_search=not a.no_github_user_search,
+        enable_recursion=not a.no_recursion,
         missing_fields=([f.strip() for f in a.missing.split(",") if f.strip()]
                         or None),
     )
@@ -5222,6 +5321,8 @@ def main():
     print(f"anchor: {idn.get('anchor', '-')}")
     print(f"corroborating sites: {', '.join(idn['corroborating_sites']) or 'none'}")
     print(f"contact-record URLs: {', '.join(idn.get('curated_sites') or []) or 'none'}")
+    if res.get("recursive_handles"):
+        print(f"recursive handles: {', '.join(res['recursive_handles'])}")
     if res["enrichment"]:
         print("enrichment:")
         for k, v in res["enrichment"].items():
