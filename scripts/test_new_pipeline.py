@@ -319,6 +319,126 @@ def test_recursion_disabled_when_asked():
     assert "realname77" not in calls
 
 
+# ── JEV identity adjudication: demote-only, fail-open ──
+
+def test_jev_demotes_only_on_confident_different_person():
+    import research_person as R
+
+    assert R._jev_demotes({"choice": "different_person", "confidence": 0.9})
+    # below threshold → no demotion
+    assert not R._jev_demotes({"choice": "different_person", "confidence": 0.4})
+    # JEV may never create a match or a demotion from anything but different_person
+    assert not R._jev_demotes({"choice": "same_person", "confidence": 1.0})
+    assert not R._jev_demotes({"choice": "insufficient_evidence", "confidence": 1.0})
+    assert not R._jev_demotes(None)
+    assert not R._jev_demotes({"choice": "different_person"})
+
+
+def test_jev_adjudicator_fails_open_without_a_key():
+    """No key / transport error → verdict is None, rules keep their answer."""
+    import research_person as R
+
+    real = R.jev_same_person
+    R.jev_same_person = lambda contact, profile, timeout=20: None
+    try:
+        calls = []
+        real_maigret = R.run_maigret
+
+        def fake(handle, timeout=200, top_sites=300):
+            calls.append(handle)
+            return ({"Portfolio": {"url": "https://portfolio.example/solo",
+                                   "fullname": "Rhea Ott", "location": "Chicago, IL",
+                                   "bio": "", "blog_url": ""}},
+                    {"tool_name": "maigret", "invoked_at": "", "input_type": "handle",
+                     "input_value": handle, "status": "success",
+                     "findings_count": 1, "error": None, "other_ids": []})
+
+        R.run_maigret = fake
+        try:
+            res = R.research_person(
+                "Rhea Ott", handles=["rheaott"], location_city="Chicago, IL",
+                enable_search=False, enable_whois=False,
+                enable_email_permutation=False, enable_company_domain=False,
+                enable_company_pages=False, enable_github_emails=False,
+                enable_targeted_site_search=False, enable_user_scanner=False,
+                enable_github_user_search=False,
+            )
+        finally:
+            R.run_maigret = real_maigret
+    finally:
+        R.jev_same_person = real
+
+    # Single full-name match, JEV unavailable → rule verdict survives untouched.
+    assert res["identity"]["level"] == "med", res["identity"]
+    assert res["identity"]["jev_verdict"] is None
+
+
+def test_jev_adjudicator_demotes_a_namesake():
+    """A confident different_person verdict drops a single-source 'med' to 'low'."""
+    import research_person as R
+
+    real = R.jev_same_person
+    R.jev_same_person = lambda contact, profile, timeout=20: {
+        "type": "choice", "choice": "different_person", "confidence": 0.88,
+        "probabilities": {"same_person": 0.08, "different_person": 0.88,
+                          "insufficient_evidence": 0.04}}
+    try:
+        real_maigret = R.run_maigret
+
+        def fake(handle, timeout=200, top_sites=300):
+            return ({"Portfolio": {"url": "https://portfolio.example/namesake",
+                                   "fullname": "Rhea Ott", "location": "Tokyo, Japan",
+                                   "bio": "", "blog_url": ""}},
+                    {"tool_name": "maigret", "invoked_at": "", "input_type": "handle",
+                     "input_value": handle, "status": "success",
+                     "findings_count": 1, "error": None, "other_ids": []})
+
+        R.run_maigret = fake
+        try:
+            res = R.research_person(
+                "Rhea Ott", handles=["rheaott"], location_city="Chicago, IL",
+                enable_search=False, enable_whois=False,
+                enable_email_permutation=False, enable_company_domain=False,
+                enable_company_pages=False, enable_github_emails=False,
+                enable_targeted_site_search=False, enable_user_scanner=False,
+                enable_github_user_search=False,
+            )
+        finally:
+            R.run_maigret = real_maigret
+    finally:
+        R.jev_same_person = real
+
+    assert res["identity"]["level"] == "low", res["identity"]
+    assert "JEV" in res["identity"]["reason"]
+    assert res["identity"]["jev_verdict"]["choice"] == "different_person"
+
+
+def test_jev_adjudicator_never_demotes_a_curated_profile():
+    """The owner's own URL is not a third-party claim; JEV must not touch it."""
+    import research_person as R
+
+    real = R.jev_same_person
+    called = []
+    R.jev_same_person = lambda contact, profile, timeout=20: called.append(profile) or {
+        "type": "choice", "choice": "different_person", "confidence": 0.99,
+        "probabilities": {"different_person": 0.99}}
+    try:
+        res = R.research_person(
+            "Rhea Ott", handles=[],
+            known_urls=["https://www.linkedin.com/in/rhea-ott"],
+            enable_search=False, enable_whois=False,
+            enable_email_permutation=False, enable_company_domain=False,
+            enable_company_pages=False, enable_github_emails=False,
+            enable_targeted_site_search=False, enable_user_scanner=False,
+            enable_github_user_search=False,
+        )
+    finally:
+        R.jev_same_person = real
+
+    assert res["identity"]["level"] in ("med", "low"), res["identity"]
+    assert called == [], "JEV must not adjudicate a curated (owner-asserted) profile"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items())
              if k.startswith("test_")]

@@ -8,7 +8,7 @@ includes:
 - scripts/**
 metadata:
   author: Indigo Karasu (indigokarasu)
-  version: 4.1.0
+  version: 4.2.0
   hermes:
     category: research
     tags:
@@ -84,7 +84,7 @@ Scout does not own: general topic research (Sift), image processing (Look), know
 
 ## Ontology types
 
-Scout works with Entity/Person, Entity/AI, and Thing/DigitalArtifact (see [[spec-ocas-ontology.md]]). It emits Chronicle Signals (type `Person` or `AI`, `source_journal_type: Research`) with a mandatory `user_relevance` field defaulting to `agent_only` unless the user requested the research or the entity links to a `user` Chronicle entry. Full schema and signal shape: `references/scout_schemas.md`.
+Scout works with Entity/Person, Entity/AI, and Thing/DigitalArtifact (see [[spec-ocas-ontology.md]]). It emits Chronicle Signals (type `Person` or `AI`, `source_journal_type: Research`) with mandatory `user_relevance` (default `agent_only`). Full schema: `references/scout_schemas.md`.
 
 ## Commands
 
@@ -119,7 +119,7 @@ Full step-by-step workflow, tool commands, handle-expansion logic, identity gati
 Phase checklist:
 - [ ] Normalize request and validate subject inputs
 - [ ] Run Tier 1 person tools + public web search in parallel
-- [ ] Expand handles with identity gate (2+ data points) and 2-pass recursion cap
+Expand handles with identity gate (2+ data points) and 2‑pass recursion cap — sweep maigret‑reported ‘other IDs’ as additional handles, taint‑propagate name‑derived seeds to avoid circular reasoning, and cap extra sweeps at MAX_RECURSIVE_HANDLES=2. Apply JEV identity adjudication to single-source matches to distinguish same person from namesake (demote-only, fail-open).
 - [ ] Run email/phone tools as data is available
 - [ ] Run public-records investigation for company/org research or corporate ties
 - [ ] Resolve entities across sources (exact/fuzzy/token overlap)
@@ -133,13 +133,30 @@ Phase checklist:
 
 Tiers and source selection: `references/scout_source_waterfall.md`, `references/scout_person_sources.md`, `references/scout_public_records.md`. Tier 1 (person tools + web) always runs; Tier 1.5 public records for company/org research or when corporate ties surface; Tier 2-3 only when enabled/permitted.
 
+### Free search sources (SearXNG)
+
+SearXNG is a free meta-search engine. To improve people-search coverage, enable these free engines in `/opt/searxng/settings.yml`:
+- bing, google, brave, qwant, yahoo, naver, seznam
+
+Avoid duckduckgo (CAPTCHA-blocked) and startpage (not available). Use the curated engine list in `weave_enrich.searxng_search` to query only these engines.
+
+### Sift free extraction sources
+
+The Sift phase (`fetch_page`) uses multiple free extraction fallbacks:
+- Direct HTTP with rotating user agents
+- Google cache (`webcache.googleusercontent.com`)
+- Wayback Machine (`web.archive.org`)
+- Jina Reader (`r.jina.ai`)
+
+This improves content extraction from auth-walled or JS-heavy sites without paid APIs.
+
 ## Output requirements
 
 Markdown brief per `references/scout_brief_template.md` (Executive Summary, Identity Resolution Notes, Findings, Social Graph, Digital Footprint, Public Records, Risk and Uncertainty, Source Log). Omit empty subsections; every finding must carry source-backed provenance.
 
 ## Inter-skill interfaces
 
-Scout writes Signal files to Chronicle (via journal signal payload). One Signal per confirmed entity or high-confidence relationship. Use schema from [[`spec-ocas-shared-schemas.md` ⚠️ Pending spec] ⚠️ Pending spec — not yet authored]. Every Signal must include `user_relevance`. See [[`spec-ocas-interfaces.md` ⚠️ Pending spec] ⚠️ Pending spec — not yet authored] for signal format.
+Scout writes Signal files to Chronicle (via journal signal payload). One Signal per confirmed entity or high-confidence relationship. Use schema from `references/scout_schemas.md`. Every Signal must include `user_relevance`.
 
 ## Error Handling
 
@@ -153,17 +170,16 @@ Scout writes Signal files to Chronicle (via journal signal payload). One Signal 
 | Tool not installed in OSINT venv | `ModuleNotFoundError` | Log degraded tool; continue; surface install hint in brief footer |
 | Tier 3 requested without PermissionGrant | Permission check fails | Skip Tier 3 silently and note in brief that it was withheld |
 | Recursive handle expansion exceeds cap | Second Sherlock pass completed | Block further recursion hard; fold settled leads into report |
+| JEV adjudication returns confidently different person | Single-source profile matches name but JEV says different person | Demote identity level (med → low) only; never promote or raise level; fail-open on any JEV error |
 
 ## Recovery Behavior
-
-This section defines error handling and recovery procedures for all scout jobs.
 
 Implements the recovery contract from `spec-ocas-recovery.md`.
 
 - **Evidence**: Every run writes to `{agent_root}/commons/data/ocas-scout/evidence.jsonl` (including no-op runs; `not_activity_reason` mandatory when no side effects).
-- **Gap detection**: On wake, checks evidence log. If gap exceeds cadence (24h update, 7d research), logs `gap_detected`.
+- **Gap detection**: On wake, checks evidence log; if gap exceeds cadence (24h update, 7d research), logs `gap_detected`.
 - **Degraded mode**: When tools unavailable, logs `degraded: <tool>` and continues with available sources.
-- **Log compaction**: Logs older than 30 days (no-op) or 90 days (error/gap) compacted. Last 7 days retained.
+- **Log compaction**: Logs older than 30 days (no-op) or 90 days (error/gap) compacted; last 7 days retained.
 
 ## Storage layout
 
@@ -175,29 +191,16 @@ See `references/okrs.md` for skill OKR definitions.
 
 ## Optional skill cooperation
 
-- **Sherlock** — username-to-platform expansion during handle expansion. Falls back to `sift.search("site:<platform> '<handle>'")` if unavailable.
-- **Sift** — web search during Tier 1; Sift-dork fallback when Sherlock unavailable
-- **Look** — reverse image search for person identification when photo available
-- **Weave** — read social graph for identity context before research (read-only)
-- **Chronicle** — emit Signal files for Chronicle promotion
-- **native-mcp / mcporter** — connect to dynamically discovered MCP-wrapped OSINT servers
-- **RapidAPI** — structured social media enrichment via `rapidapi_call` (see RapidAPI Enrichment Workflow below)
+Sherlock (handle expansion), Sift (web search), Look (reverse image), Weave (social graph, read-only), Chronicle (Signals), native-mcp/mcporter (MCP servers), RapidAPI (social enrichment — see below).
 
 ---
 ## RapidAPI Enrichment Workflow
 
-During Phase 3 (Handle Expansion) and Phase 4 (Email/Phone Tools), use RapidAPI social media endpoints to enrich profiles with structured data that free tools (Sherlock/Maigret) can't provide. Full procedure including person/company enrichment pipelines, rate limiting, and tier integration: see `references/rapidapi-enrichment-workflow.md`.
+During Phase 3/4, use RapidAPI social endpoints to enrich profiles beyond free tools. Full procedure: `references/rapidapi-enrichment-workflow.md`.
 
 ## Journal outputs
 
-- Observation Journal — research runs producing findings
-- Research Journal — structured multi-source research sessions
-
-Journals must include an `entities_observed` array (name, type, confidence, user_relevance). See `references/journal.md` for schema.
-
-## Visibility
-
-public
+Observation/Research Journals; must include `entities_observed` (name, type, confidence, user_relevance). See `references/journal.md`.
 
 ## Initialization
 
@@ -213,13 +216,11 @@ On first invocation, run `scout.init`: create data dirs + default config, create
 
 ## Self-update
 
-`scout.update` pulls the latest package from the `source:` URL in this file's frontmatter. Runs silently — no output unless the version changed or an error occurred.
-
-Read `references/self_update.md` for the full self-update procedure.
+`scout.update` pulls the latest package from the `source:` URL in this file's frontmatter. Runs silently — no output unless the version changed or an error occurred. Self-updates every 24 hours. Read `references/self_update.md` for the full procedure.
 
 ## External Catalog Review
 
-Monitors: [awesome-osint-mcp-servers](https://github.com/soxoj/awesome-osint-mcp-servers) (weekly), [awesome-osint](https://github.com/jivoi/awesome-osint) (monthly), [API-s-for-OSINT](https://github.com/cipher387/API-s-for-OSINT) (monthly). New tools classified by tier → added to `references/scout_person_sources.md`. See `references/scout_mcp_discovery.md` for dynamic discovery. See `references/sources-refresh.md` for the concrete refresh procedure that runs on the `scout:sources-refresh` cron.
+Monitors awesome-osint-mcp-servers (weekly), awesome-osint (monthly), API-s-for-OSINT (monthly). New tools classified by tier → `references/scout_person_sources.md`. See `references/scout_mcp_discovery.md` and `references/sources-refresh.md`.
 
 ## Gotchas
 
@@ -242,13 +243,16 @@ See `references/gotchas.md` for the full list (Tier 3 permission, user_relevance
 | `references/rapidapi-enrichment-workflow.md` | During Phase 3/4 research; RapidAPI person/company enrichment pipelines |
 | `references/journal.md` | Before scout.journal; at end of every run |
 | `references/self_update.md` | Before running `scout.update`; when debugging self-update failures |
-
-## Update command
-
-This skill self-updates every 24 hours via:
-
-```bash
-scout.update
-```
+| `references/gotchas.md` | Before any run; non-obvious issues (Tier 3 permission, user_relevance default, Sherlock cap, identity gate, minimize_pii, RapidAPI, ICIJ cache) |
+| `references/invariants.md` | Before any run; the ten non-negotiable rules and their rationale |
+| `references/storage-layout.md` | Before first invocation or when locating data dirs |
+| `references/okrs.md` | When evaluating skill performance or OKR progress |
+| `references/interactive-menu.md` | When invoked interactively; two-level menu structure |
+| `references/source_reliability.md` | When assessing source credibility or reliability tiers |
+| `references/correlation_and_expansion.md` | During handle expansion and timing correlation phases |
+| `references/jev-identity-adjudication.md` | When applying JEV identity adjudication to single-source matches |
+| `references/profile_extraction.md` | During profile extraction from research results |
+| `references/public_records/` | Directory of 13 source-specific files; read the relevant one when researching that source |
+| `references/plans/` | Archived implementation plans (not needed for normal runs) |
 
 This pulls the latest version from GitHub and restarts the skill's background tasks if applicable.

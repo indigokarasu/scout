@@ -3730,6 +3730,131 @@ def expand_known_urls(name, known_urls):
 
 
 # --------------------------------------------------------------------------
+# JEV identity adjudication
+# --------------------------------------------------------------------------
+# The rule gate can corroborate a name but cannot tell a distinctive name from
+# a common one. Where the whole verdict rests on ONE profile, a namesake whose
+# page happens to carry the same name (and often the same city) passes the gate
+# exactly like the real person. JEV reads the two records side by side and
+# judges identity — the one question rules cannot answer.
+#
+# ASYMMETRY (from jeve-api-integration): JEV may only make a rule STRICTER.
+# A confident 'different_person' demotes a single-source match; nothing JEV
+# returns can create a match, and any failure (no key, timeout, bad JSON)
+# leaves the rule verdict exactly as it was.
+JEV_IDENTITY_ENABLED = True
+JEV_IDENTITY_MIN_CONFIDENCE = 0.70
+_JEVER_DIR = "/root/.hermes/skills/jeveer"
+
+_JEV_IDENTITY_CRITERIA = {
+    "same_person": ("The profile's name and at least one other attribute "
+                    "(location, employer, education, linked account) agree with "
+                    "the contact, and any disagreement is explained by a job or "
+                    "city change rather than a different life."),
+    "different_person": ("A namesake: the name collides but the identity "
+                         "attributes do not line up — the employer/role/location "
+                         "conflict is not plausibly the same person."),
+    "insufficient_evidence": ("The overlap is real but too thin to call either "
+                              "way without a stronger shared identifier (email, "
+                              "phone, or a second profile)."),
+}
+
+
+def _jev_identity_available():
+    """True when the JEV client can reach the API. Never raises."""
+    try:
+        import sys as _s
+        if _JEVER_DIR not in _s.path:
+            _s.path.insert(0, _JEVER_DIR)
+        import jev_client  # noqa: PLC0415
+        return bool(jev_client.available())
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def jev_same_person(contact, profile, timeout=20):
+    """Ask JEV whether one third-party profile belongs to this contact.
+
+    ``contact`` is a dict of what the contact record already asserts;
+    ``profile`` is a dict describing one corroborating profile. Returns the
+    answer dict for the ``same_person`` Choice question, or None on any failure
+    (no key, transport error, malformed reply) so the caller keeps its rule
+    verdict.
+    """
+    try:
+        import sys as _s
+        if _JEVER_DIR not in _s.path:
+            _s.path.insert(0, _JEVER_DIR)
+        import jev_client  # noqa: PLC0415
+    except Exception:  # noqa: BLE001
+        return None
+
+    state = {
+        "contact_record": {
+            "name": contact.get("name", ""),
+            "given_name": contact.get("name_given", ""),
+            "family_name": contact.get("name_family", ""),
+            "email": contact.get("email", ""),
+            "employer": contact.get("org", ""),
+            "occupation": contact.get("occupation", ""),
+            "location_city": contact.get("location_city", ""),
+        },
+        "candidate_profile": {
+            "site": profile.get("site", ""),
+            "url": profile.get("url", ""),
+            "handle": profile.get("handle", ""),
+            "name_on_profile": profile.get("fullname", ""),
+            "location_on_profile": profile.get("location", ""),
+            "org_on_profile": profile.get("org", ""),
+            "bio_on_profile": (profile.get("bio") or "")[:600],
+        },
+        "task": ("Decide whether the candidate profile belongs to the same human "
+                 "as the contact record."),
+    }
+    questions = {
+        "same_person": {
+            "type": "choice",
+            "instructions": (
+                "The contact record and one candidate profile are given in the "
+                "state. Decide whether the profile belongs to the SAME "
+                "individual as the contact, a DIFFERENT person who merely shares "
+                "the name, or whether the evidence is INSUFFICIENT. Weigh exact "
+                "name agreement against agreement on city, employer, role and "
+                "any linked account; a conflicting employer is not by itself a "
+                "disqualifier, but a conflicting life is."
+            ),
+            "criteria": _JEV_IDENTITY_CRITERIA,
+        },
+    }
+    try:
+        answers = jev_client.system_one(state, questions, timeout=timeout)
+    except Exception:  # noqa: BLE001
+        return None
+    if not isinstance(answers, dict):
+        return None
+    ans = answers.get("same_person")
+    if not isinstance(ans, dict):
+        return None
+    # A malformed criteria map returns a confident answer about a label we
+    # invented; only a member of the intended option set is a real verdict.
+    if ans.get("choice") not in _JEV_IDENTITY_CRITERIA:
+        return None
+    return ans
+
+
+def _jev_demotes(verdict, min_confidence=JEV_IDENTITY_MIN_CONFIDENCE):
+    """True when JEV is confident this profile is a different person."""
+    if not verdict:
+        return False
+    if verdict.get("choice") != "different_person":
+        return False
+    try:
+        return float(verdict.get("confidence") or 0.0) >= min_confidence
+    except (TypeError, ValueError):
+        return False
+
+
+# --------------------------------------------------------------------------
 # Entrypoint
 # --------------------------------------------------------------------------
 def research_person(name, email="", employer="", handles=None, phone="",
@@ -4277,12 +4402,34 @@ def research_person(name, email="", employer="", handles=None, phone="",
         reason = (result["identity"]["reason"]
                   or "no profile corroborated the contact name")
 
+    # ---- JEV adjudication of the single-source band (may only DEMOTE).
+    # When the entire verdict rests on one profile, a namesake passes the name
+    # gate exactly like the real person. Ask JEV to read the two records side by
+    # side; a confident 'different_person' drops the level. A curated profile is
+    # exempt — that is the owner's own assertion, not a third party's claim.
+    _jev_verdict = None
+    if (JEV_IDENTITY_ENABLED and fnc <= 1 and len(corroborating) == 1
+            and not corroborating[0].get("curated")
+            and not corroborating[0].get("circular_anchor")):
+        _contact_ctx = {"name": name, "name_given": name_given,
+                        "name_family": name_family, "email": email,
+                        "org": org or employer, "occupation": occupation,
+                        "location_city": location_city}
+        _jev_verdict = jev_same_person(_contact_ctx, corroborating[0])
+        if _jev_demotes(_jev_verdict):
+            _prev = level
+            level = "low"
+            reason = (f"JEV judged the single matching profile a different "
+                      f"person (p={_jev_verdict.get('probabilities', {}).get('different_person', 0):.2f}); "
+                      f"demoted from {_prev}")
+
     result["identity"] = {
         "level": level,
         "corroborating_sites": corr_sites,
         "curated_sites": curated_sites,
         "anchor": "contact_record" if (curated_anchors and fnc < 2) else "name_corroboration",
         "reason": reason,
+        "jev_verdict": _jev_verdict,
     }
 
     # ---- Findings: one per corroborating profile (provenance for identity).
