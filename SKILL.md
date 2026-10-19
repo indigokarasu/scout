@@ -133,22 +133,7 @@ Expand handles with identity gate (2+ data points) and 2‑pass recursion cap �
 
 Tiers and source selection: `references/scout_source_waterfall.md`, `references/scout_person_sources.md`, `references/scout_public_records.md`. Tier 1 (person tools + web) always runs; Tier 1.5 public records for company/org research or when corporate ties surface; Tier 2-3 only when enabled/permitted.
 
-### Free search sources (SearXNG)
-
-SearXNG is a free meta-search engine. To improve people-search coverage, enable these free engines in `/opt/searxng/settings.yml`:
-- bing, google, brave, qwant, yahoo, naver, seznam
-
-Avoid duckduckgo (CAPTCHA-blocked) and startpage (not available). Use the curated engine list in `weave_enrich.searxng_search` to query only these engines.
-
-### Sift free extraction sources
-
-The Sift phase (`fetch_page`) uses multiple free extraction fallbacks:
-- Direct HTTP with rotating user agents
-- Google cache (`webcache.googleusercontent.com`)
-- Wayback Machine (`web.archive.org`)
-- Jina Reader (`r.jina.ai`)
-
-This improves content extraction from auth-walled or JS-heavy sites without paid APIs.
+Free search & Sift fallbacks: `references/free-search-and-cooperation.md`.
 
 ## Output requirements
 
@@ -189,9 +174,7 @@ See `references/storage-layout.md` for directory structure. Read `references/sco
 
 See `references/okrs.md` for skill OKR definitions.
 
-## Optional skill cooperation
-
-Sherlock (handle expansion), Sift (web search), Look (reverse image), Weave (social graph, read-only), Chronicle (Signals), native-mcp/mcporter (MCP servers), RapidAPI (social enrichment — see below).
+Skill cooperation: `references/free-search-and-cooperation.md`.
 
 ---
 ## RapidAPI Enrichment Workflow
