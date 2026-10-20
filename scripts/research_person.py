@@ -200,6 +200,118 @@ _TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
 # them, not printing them, so scout harvests the line to run the pivot itself.
 _OTHER_IDS_RE = re.compile(r"Found target'?s other IDs?:?\s*(.+)", re.IGNORECASE)
 
+# ──────────────────────────────────────────────────────────────────────────
+# TinyFish browser verification (for auth-walled platforms)
+# ──────────────────────────────────────────────────────────────────────────
+def _tinyfish_verify_profile(url, platform, name, name_given, name_family, timeout=60):
+    """
+    Use TinyFish stealth browser to fetch a profile page and verify it names the contact.
+    Returns (verified, fullname, location, bio, profile_pic_url) or (False, None, None, None, None).
+    """
+    try:
+        # Import the helper dynamically
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "ocas-weave", "scripts"))
+        from tinyfish_helper import browse_and_extract
+        
+        # Platform-specific extraction logic
+        if platform == "linkedin":
+            extractor_js = """
+            // Find profile-displayphoto URLs
+            const matches = document.documentElement.outerHTML.match(/https:\\/\\/media\\.licdn\\.com\\/dms\\/image[^"']*profile-displayphoto[^"']*/g);
+            let picUrl = null;
+            if (matches) {
+                const candidates = matches.filter(url => {
+                    if (url.includes('profile-displaybackgroundimage')) return false;
+                    if (url.includes('article-cover')) return false;
+                    if (url.includes('company-logo')) return false;
+                    if (url.includes('feedshare')) return false;
+                    if (url.includes('articleshare')) return false;
+                    if (url.includes('videocover')) return false;
+                    return true;
+                });
+                if (candidates.length > 0) picUrl = candidates[0];
+            }
+            // Get full name from page
+            const nameEl = document.querySelector('h1.text-heading-xlarge') || 
+                          document.querySelector('.pv-text-details__left-panel h1') ||
+                          document.querySelector('h1[class*="text-heading"]');
+            const fullname = nameEl ? nameEl.innerText.trim() : null;
+            // Get headline/location
+            const headlineEl = document.querySelector('.text-body-medium.break-words') ||
+                              document.querySelector('.pv-text-details__left-panel .text-body-medium');
+            const headline = headlineEl ? headlineEl.innerText.trim() : null;
+            return JSON.stringify({verified: !!picUrl, fullname, location: headline, bio: '', profile_pic: picUrl});
+            """
+        elif platform in ("twitter", "x"):
+            extractor_js = """
+            // Get profile image
+            const imgEl = document.querySelector('img[data-testid="UserAvatar-Container"]') ||
+                         document.querySelector('img[src*="pbs.twimg.com/profile_images"]');
+            const profile_pic = imgEl ? imgEl.src : null;
+            // Get name
+            const nameEl = document.querySelector('[data-testid="UserName"] span') ||
+                          document.querySelector('h1[dir="auto"] span');
+            const fullname = nameEl ? nameEl.innerText.trim() : null;
+            // Get bio
+            const bioEl = document.querySelector('[data-testid="UserDescription"]');
+            const bio = bioEl ? bioEl.innerText.trim() : null;
+            // Get location
+            const locEl = document.querySelector('[data-testid="UserLocation"] span');
+            const location = locEl ? locEl.innerText.trim() : null;
+            return JSON.stringify({verified: !!profile_pic, fullname, location, bio, profile_pic});
+            """
+        elif platform == "instagram":
+            extractor_js = """
+            // Get profile image
+            const imgEl = document.querySelector('header img') || document.querySelector('img._aarf');
+            const profile_pic = imgEl ? imgEl.src : null;
+            // Get name
+            const nameEl = document.querySelector('h2._aarf') || document.querySelector('header h2');
+            const fullname = nameEl ? nameEl.innerText.trim() : null;
+            // Get bio
+            const bioEl = document.querySelector('div._aarf h1') || document.querySelector('header div._aarf');
+            const bio = bioEl ? bioEl.innerText.trim() : null;
+            return JSON.stringify({verified: !!profile_pic, fullname, location: '', bio, profile_pic});
+            """
+        elif platform == "facebook":
+            extractor_js = """
+            // Get profile image
+            const imgEl = document.querySelector('img[data-visualcompletion="image"]') || 
+                         document.querySelector('.profilePic img');
+            const profile_pic = imgEl ? imgEl.src : null;
+            // Get name
+            const nameEl = document.querySelector('h1[dir="auto"]') || document.querySelector('h1 span');
+            const fullname = nameEl ? nameEl.innerText.trim() : null;
+            return JSON.stringify({verified: !!profile_pic, fullname, location: '', bio: '', profile_pic});
+            """
+        elif platform == "reddit":
+            extractor_js = """
+            // Get profile icon
+            const imgEl = document.querySelector('img[alt*="Avatar"]') || document.querySelector('img[class*="avatar"]');
+            const profile_pic = imgEl ? imgEl.src : null;
+            // Get name
+            const nameEl = document.querySelector('h1') || document.querySelector('[data-testid="profile-title"]');
+            const fullname = nameEl ? nameEl.innerText.trim() : null;
+            // Get karma/bio
+            const bioEl = document.querySelector('[data-testid="profile-description"]');
+            const bio = bioEl ? bioEl.innerText.trim() : null;
+            return JSON.stringify({verified: !!profile_pic, fullname, location: '', bio, profile_pic});
+            """
+        else:
+            return False, None, None, None, None
+        
+        result = browse_and_extract(url, extractor_js, timeout=timeout)
+        if result and result.get("verified"):
+            # Verify the name matches
+            tf_name = result.get("fullname", "")
+            if tf_name and _name_confirms(name, tf_name):
+                return True, tf_name, result.get("location"), result.get("bio"), result.get("profile_pic")
+        return False, None, None, None, None
+    except Exception as e:
+        # Fail silently - TinyFish verification is best-effort
+        return False, None, None, None, None
+
 # --------------------------------------------------------------------------
 # Profile-URL parsing
 # --------------------------------------------------------------------------
@@ -5075,10 +5187,45 @@ def research_person(name, email="", employer="", handles=None, phone="",
         # same corroboration standard applied to every other profile.
         verified_n = 0
         for cand in result["search_candidates"][:_verify_cap]:
-            title, body, _craw = fetch_page_text(cand["url"], with_raw=True)
-            if not (title or body):
+            url = cand["url"]
+            parsed = parse_profile_url(url)
+            platform = (parsed["platform"] if parsed else "Website").lower()
+            
+            # For auth-walled platforms, try TinyFish browser verification
+            tinyfish_platforms = {"linkedin", "twitter", "x", "instagram", "facebook", "reddit"}
+            tinyfish_verified = False
+            tinyfish_data = {}
+            
+            if platform in tinyfish_platforms:
+                tf_verified, tf_fullname, tf_location, tf_bio, tf_pic = _tinyfish_verify_profile(
+                    url, platform, name, name_given, name_family
+                )
+                if tf_verified:
+                    tinyfish_verified = True
+                    tinyfish_data = {
+                        "fullname": tf_fullname or "",
+                        "location": tf_location or "",
+                        "bio": tf_bio or "",
+                        "profile_pic": tf_pic or "",
+                    }
+            
+            # Standard fetch for non-auth-walled or as fallback
+            title, body, _craw = fetch_page_text(url, with_raw=True)
+            if not (title or body) and not tinyfish_verified:
                 continue
-            hay = (title + " " + body)
+            
+            # Combine content from both sources
+            hay_parts = []
+            if title:
+                hay_parts.append(title)
+            if body:
+                hay_parts.append(body)
+            if tinyfish_data.get("fullname"):
+                hay_parts.append(tinyfish_data["fullname"])
+            if tinyfish_data.get("bio"):
+                hay_parts.append(tinyfish_data["bio"])
+            hay = " ".join(hay_parts)
+            
             shared, fam = _name_agreement(name, hay)
             org_ok = bool(org) and org.strip().lower() in hay.lower()
             # Token overlap across a whole page promoted pages that merely contain
@@ -5089,7 +5236,10 @@ def research_person(name, email="", employer="", handles=None, phone="",
                 continue   # page does not name the contact -> stays unverified
             cand["status"] = "verified_candidate"
             cand["verified"] = True
-            cand["verified_by"] = ("full name on page" if named
+            if tinyfish_verified:
+                cand["verified_by"] = "tinyfish_browser"
+            else:
+                cand["verified_by"] = ("full name on page" if named
                                    else "family name + employer on page")
             # A page whose DOMAIN carries the contact's name is theirs, not just
             # about them; anything else is mined only next to their name.
@@ -5110,9 +5260,9 @@ def research_person(name, email="", employer="", handles=None, phone="",
                 "site": (parsed["platform"] if parsed else "Website"),
                 "handle": (parsed["handle"] if parsed else ""),
                 "url": cand["url"],
-                "fullname": title[:120],
-                "location": "",
-                "bio": "",
+                "fullname": (tinyfish_data.get("fullname") or title)[:120],
+                "location": tinyfish_data.get("location", ""),
+                "bio": tinyfish_data.get("bio", ""),
                 "blog_url": "",
                 "provenance": "name_search",
                 "curated": False,

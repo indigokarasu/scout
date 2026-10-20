@@ -1,4 +1,5 @@
 ---
+warning: 'FALSE TRIGGER RISK: Has had 50% false trigger rate on interactive loads. Auto-loaded in VPN and order-status sessions where user did not request OSINT research. Do not load when user asks about VPN, orders, or general web tasks. Added automatically on 2026-10-19.'
 license: MIT
 name: ocas-scout
 description: 'NOT for VPN/captcha or booking tasks. Structured OSINT research on people, companies, and organizations. Use for provenance-backed briefs, entity resolution across public sources, background research with cited sources, or free-first research workflows that escalate to paid sources only with explicit permission. Use Sift for topic research without a person/org focus. Never for illegal data collection. Guard front-loaded into the 57-char router window on 2026-10-15: a prior auto-load fired on a VPN/captcha question, and the existing "Do not use for..." exclusion sat at char 276 where the router cannot see it.'
@@ -119,7 +120,7 @@ Full step-by-step workflow, tool commands, handle-expansion logic, identity gati
 Phase checklist:
 - [ ] Normalize request and validate subject inputs
 - [ ] Run Tier 1 person tools + public web search in parallel
-Expand handles with identity gate (2+ data points) and 2‑pass recursion cap — sweep maigret‑reported ‘other IDs’ as additional handles, taint‑propagate name‑derived seeds to avoid circular reasoning, and cap extra sweeps at MAX_RECURSIVE_HANDLES=2. Apply JEV identity adjudication to single-source matches to distinguish same person from namesake (demote-only, fail-open).
+Expand handles with identity gate (2+ data points) and 2‑pass recursion cap — sweep maigret‑reported ‘other IDs’ as additional handles, taint‑propagate name‑derived seeds to avoid circular reasoning, and cap extra sweeps at MAX_RECURSIVE_HANDLES=2. Apply JEV identity adjudication to single-source matches to distinguish same person from namesake (demote-only, fail-open). For auth-walled platforms (LinkedIn, Twitter/X, Instagram, Facebook, Reddit), use TinyFish stealth browser verification to extract profile pictures and verify identity matches before accepting data.
 - [ ] Run email/phone tools as data is available
 - [ ] Run public-records investigation for company/org research or corporate ties
 - [ ] Resolve entities across sources (exact/fuzzy/token overlap)
