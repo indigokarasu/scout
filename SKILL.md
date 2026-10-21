@@ -3,7 +3,7 @@ warning: 'FALSE TRIGGER RISK: Has had 50% false trigger rate on interactive load
 license: MIT
 name: ocas-scout
 description: 'NOT for VPN/captcha or booking tasks. Structured OSINT research on people, companies, and organizations. Use for provenance-backed briefs, entity resolution across public sources, background research with cited sources, or free-first research workflows that escalate to paid sources only with explicit permission. Use Sift for topic research without a person/org focus. Never for illegal data collection. Guard front-loaded into the 57-char router window on 2026-10-15: a prior auto-load fired on a VPN/captcha question, and the existing "Do not use for..." exclusion sat at char 276 where the router cannot see it.'
-source: https://github.com/<agent-handle>/scout
+source: https://github.com/indigokarasu/scout
 includes:
 - references/**
 - scripts/**
