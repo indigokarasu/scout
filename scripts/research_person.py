@@ -308,7 +308,7 @@ def _tinyfish_verify_profile(url, platform, name, name_given, name_family, timeo
             if tf_name and _name_confirms(name, tf_name):
                 return True, tf_name, result.get("location"), result.get("bio"), result.get("profile_pic")
         return False, None, None, None, None
-    except Exception as e:
+    except Exception:
         # Fail silently - TinyFish verification is best-effort
         return False, None, None, None, None
 
