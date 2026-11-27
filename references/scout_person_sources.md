@@ -1,9 +1,9 @@
 # Scout Person-Specific OSINT Sources
 
 Curated list of person-specific OSINT tools and APIs, organized by capability.
-Updated: 2026-06-29. Sources reviewed from jivoi/awesome-osint, laramies/theHarvester,
-apurvsinghgautam/robin, cipher387/API-s-for-OSINT, soxoj/awesome-osint-mcp-servers,
-and christinminor459/OnionClaw.
+Updated: 2026-11-22. Sources reviewed from jivoi/awesome-osint, cipher387/API-s-for-OSINT,
+soxoj/awesome-osint-mcp-servers, christinminor459/OnionClaw (README unreachable this cycle;
+last known state retained), plus APIs-for-OSINT people/email/phone/face sections.
 
 ## Selection criteria
 
@@ -43,6 +43,17 @@ Find accounts belonging to a person across platforms.
 || **NameKetchup** | Web (nameketchup.com) | Username/domain | ~15s | Checks domain name and username in popular social media/platforms. |
 || **Snoop** | `pip install snoop` | Nickname search | ~45s | Search for a nickname on the web (OSINT world). |
 || **Cupidcr4wl** | `pip install cupidcr4wl` | Username + phone | ~30s | Crawls adult content platforms for targeted accounts or persons. |
+|| **Helix** | GitHub (thalha-a9/helix) | 8,000+ sites | ~60s | Checks a username on 8,000+ sites, re-verifies every hit live against impossible usernames, and graphs how the accounts connect. |
+|| **TraceFind** | Web (tracefind.info) | Thousands of sites | ~30s | Scans thousands of sites for username presence. |
+|| **Threat Actor Username Search** | Web (threatactorusernames.com) | 3M+ threat-actor usernames | ~15s | Search where known criminal and bot usernames post and operate online. |
+|| **User Search** | Web (usersearch.org) | 3,000+ sites | ~60s | Username, email, phone number or picture across social networks, dating sites, forums, crypto forums, chat sites and blogs. |
+|| **TwexAPI Twitter Viewer** | Web (twexapi.io) | X (Twitter) | ~15s | View a public X profile and its latest posts without logging in or creating an account. |
+|| **Osintgram** | GitHub (Datalux/Osintgram) | Instagram | ~60s | Interactive shell for OSINT analysis of any Instagram account by nickname. |
+|| **insto** | GitHub (subzeroid/insto) | Instagram | ~60s | OSINT CLI/REPL: profile, media, followers, dossier, geo-fingerprint; token-based (HikerAPI), no IG account needed. |
+|| **2Chat** | Web (2chat.co/tools/whatsapp-checker) | WhatsApp | ~15s | Check whether a phone number is on WhatsApp. |
+|| **Telerecon** | GitHub (sockysec/Telerecon) | Telegram | ~60s | Reconnaissance framework for researching and investigating Telegram. |
+|| **Teleteg** | Web (teleteg.com) | Telegram | ~30s | Telegram search engine and channel catalog; 10 results on the free plan. |
+|| **Tme-s** | GitHub (axmaier/tme-s) | Telegram | ~30s | Reads public Telegram channels via logged-out t.me/s previews; no API key, phone number, or account. |
 
 **Scout workflow integration:**
 - Step 5 (handle expansion) already runs Sherlock. Add Maigret as a second-pass
@@ -85,6 +96,21 @@ Discover accounts, breaches, and metadata linked to an email address.
 || **Toofr** | Web (toofr.com) | Email finder | Freemium | Find anyone's email address in seconds. |
 || **Peepmail** | Web (samy.pl/peepmail) | Email discovery | Yes | Discover business email addresses for users, even if not publicly shared. |
 || **Email Extractor** | Web (99tools.net/email-extractor) | Bulk extraction | Yes | Browser-based utility to extract email addresses from bulk text or raw data. |
+|| **Blacklist Checker** | Web (blacklistchecker.com) | Blacklist check | Yes | Checks 100+ email blacklists in seconds. |
+|| **Email Address Validator** | Web (email-validator.net) | Deliverability | Yes | Deliverability, bounce reduction, fraud prevention. |
+|| **Email Format** | Web (email-format.com) | Format patterns | Yes | Finds the email address formats used by different companies. |
+|| **Gitrecon** | GitHub (atiilla/gitrecon) | GitHub scan | Yes | Node.js tool scanning GitHub repositories for exposed emails and names. |
+|| **Hunter** | Web (hunter.io) | Email finder | Freemium | Finds email addresses by domain and connects them to people. |
+|| **MailTester** | Web (mailtester.com) | Email discovery | Yes | Hunt for emails and improve deliverability. |
+|| **OpenLeads** | GitHub (Samyrrrrrr990/openleads) | People + work email | Yes | CLI finding people and work emails from OpenStreetMap, GitHub, OpenAlex, SEC EDGAR and team pages; labels each address found/pattern/guessed; no API keys. |
+|| **ThatsThem** | Web (thatsthem.com) | Reverse email lookup | Freemium | Reverse email lookup. |
+|| **Verify Email** | Web (verify-email.org) | Verification | Yes | Email verification — checks whether an address exists. |
+|| **Kiprio Disposable Email** | Web (kiprio.com/v1/disposable-email/) | Disposable check | Yes | Checks whether an email domain is temporary/disposable; no auth required. |
+|| **Kiprio Email Validate** | Web (kiprio.com/v1/email-validate/) | Validation | Yes | MX record checks, disposable-domain detection, typo suggestions. |
+|| **GitLeak** | Web (gitleak.io) | Yes | GitHub OSINT: extracts hidden email addresses, commit timezones and activity patterns via .patch metadata. [Tier 1] |
+|| **OSINTEye** | GitHub (atiilla/OsintEye) | Yes | WPF desktop app for GitHub intelligence, social media reconnaissance and subdomain discovery. [Tier 1] |
+|| **VoilaNorbert** | Web (voilanorbert.com/api/) | Paid | Find anyone's contact information for lead research and talent acquisition. From $49/month. [Tier 3] |
+|| **looot** | API (looot.ai) + MCP | Paid, no free tier | Work email and phone lookup, email verification, company and people enrichment; pay-per-call API and MCP server. Prepaid balance from $5. [Tier 3] |
 
 **Scout workflow integration:**
 - When an email is known: run Holehe (account discovery) + h8mail (breach check) in parallel.
@@ -115,6 +141,7 @@ Identify the owner and metadata of a phone number.
 || **Sync.ME** | Web (sync.me) | Caller ID | Freemium | Caller ID and spam blocker app with reverse lookup. |
 || **USPhoneBook** | Web (usphonebook.com) | Reverse phone lookup | Freemium | Reverse phone and address lookups. |
 || **SearchPeopleFREE** | Web (searchpeoplefree.com/phone-lookup) | Phone/address lookup | Free | Reverse name, address, email, or phone lookup. |
+|| **Reverse Phone Lookup** | Web (reversephonelookup.com) | Phone lookup | Freemium | Carrier, region, service provider, and switch information. |
 
 **Scout workflow integration:**
 - PhoneInfoga is the default (free, no API key, pip-installable).
@@ -138,6 +165,21 @@ Link a face to online profiles and identities.
 | **Search4faces** | API (search4faces.com/api.html) | Face detection + bounding boxes | Paid | Detect and locate human faces within an image. $21/1000 requests. |
 | **Face++** | API (faceplusplus.com) | Face search by image | Paid | Search for people in social networks by facial image. From $0.03/call. |
 | **BetaFace** | API (betafaceapi.com) | Face analysis + search | Freemium | Scan images/URLs, find faces, verify and identify. 50 images/day free. |
+|| **Bing Images Search API** | API (bing.com/apis/bing-image-search-api) | Reverse image | Freemium | 1,000 free requests/month; reverse image search with thumbnails, full-size URLs and image metadata. |
+|| **Google Reverse images search API** | GitHub (SOME-1HING/google-reverse-image-api) | Reverse image | Free | Unofficial Node.js/Express API for Google reverse image search by image URL. |
+|| **Dupli Checker** | Web | Yes | Reverse image search by upload, URL, or keyword. [Tier 1] |
+|| **Faceagle** | Web | Limited free | Face recognition search engine. [Tier 2] |
+|| **GeoSpyer** | GitHub (atiilla/geospy) | Yes | Python tool using Graylark's AI geo-location service to uncover where photos were taken. [Tier 1] |
+|| **KartaVision** | Web | Yes | Search engine for KartaView imagery; natural-language and image search. [Tier 1] |
+|| **Lenso.ai** | Web | Limited free | Reverse image search with facial recognition — find people, similar images, identical places. [Tier 2] |
+|| **PicTriev** | Web | Yes | Face search engine. [Tier 1] |
+|| **PimEyes** | Web | Paid | Online face search engine finding pictures containing given faces across the Internet. [Tier 3] |
+|| **ChronoVerify** | Web | Free web tool | EXIF/XMP reader, C2PA Content Credentials validation, classical pixel forensics with a typed verdict. [Tier 2] |
+|| **GeoSpy** | Web | Limited free | AI-based image OSINT: geolocate where a photo was taken. [Tier 2] |
+|| **ProfileImageIntel** | Web | Yes | Social media and WhatsApp profile image tool: find when a profile image was uploaded. [Tier 1] |
+|| **TinEyeAPI** | API (services.tineye.com/TinEyeAPI) | Paid | Reverse image search API: verify images, track usage, check uniqueness. From $200/5,000 searches. [Tier 2] |
+|| **Picarta** | API (picarta.ai/api) | Yes | Estimate the location where a photo was taken from visual content. 100 requests/day free. [Tier 1] |
+|| **Oceanir** | API (docs.oceanir.ai) | Paid | Estimate photo locations from visual content without GPS metadata. Paid credits; API access reviewed. [Tier 2] |
 
 **Scout workflow integration:**
 - Face search is Tier 2 (requires image input, not always available).
@@ -173,6 +215,78 @@ Find people by name, address, or other attributes.
 | **LERS Portal Directory** | Web (ministryofcyberaffairs.com) | Law-enforcement data requests | Yes | Directory of platform law-enforcement data-request portals (WhatsApp, Google, Apple, Telegram, TikTok, Binance). |
 | **OSINTNova** | Web (app.osintnova.com) | AI-powered OSINT | Freemium | AI-powered platform for advanced digital investigations and intelligence analysis. |
 | **AnalyzeID** | Web | Identity analysis | Freemium | Identity analysis and verification platform. |
+|| **192 (UK)** | Web (192.com) | People search | Freemium | Search by person, business, or address in the UK; limited free info, premium upsell. |
+|| **411 (US)** | Web (411.com) | People search | Freemium | Person, phone number, address, and business search; limited free info, premium upsell. |
+|| **Black Book Online** | Web (blackbookonline.info) | Public records | Yes | Free nationwide directory of public record lookups. |
+|| **Canada411** | Web (canada411.ca) | People search | Yes | Person, phone number, and business search in Canada. |
+|| **Family Search** | Web (familysearch.org) | Genealogy | Yes | Popular free genealogy site; registration required. |
+|| **Federal Bureau of Prisons Inmate Locator (US)** | Web (bop.gov) | Inmate search | Yes | Federal inmates incarcerated from 1982 to the present. |
+|| **Offendersearch** | Web (offendersearch.app) | Offender registries | Yes | All 58 US state, territory and tribal sex-offender registries in one query; public API + MCP server. |
+|| **recap-cli** | GitHub (NPCmillionaire/recap-cli) | Court dockets | Yes | Free CLI to search and download U.S. federal court dockets from the RECAP archive (CourtListener); free API token required. |
+|| **UK Phone Book** | Web (ukphonebook.com/) | People search | Freemium | UK people search similar to 192.com. |
+|| **VerifiedHer** | Web (verifiedher.com) | Creator registry | Yes | Free registry of online creators and influencers with sourced real / AI persona / unverified verdicts. |
+|| **White Pages (US)** | Web (whitepages.com) | People search | Freemium | Limited free info, premium data upsell. |
+|| **Genderize.io** | API (genderize.io) | Name analysis | Yes | Gender likelihood and name popularity from a first name; 1,000 names/day free. |
+|| **Agify.io** | API (agify.io) | Name analysis | Yes | Predicts age from a name; 1,000 names/day free. |
+|| **Nationalize.io** | API (nationalize.io) | Name analysis | Yes | Predicts nationality from a name; 1,000 names/day free. |
+|| **Geocreepy** | Web | Yes | Geolocates social media check-ins and posts; maps where a person has been. [Tier 1] |
+|| **Mail.Ru Social Network Search** | Web | Yes | Russian social network search — find profiles across the Mail.Ru ecosystem. [Tier 1] |
+|| **SocialBlade** | Web | Limited free | YouTube/Twitch/Instagram/TikTok creator statistics, subscriber and view counts, rankings. [Tier 2] |
+|| **ExportData** | Web | Limited free | Data export tool for historical tweets, followers & followings, and historical trends. [Tier 2] |
+|| **Foller.me** | Web | Limited free | Twitter/X account analysis: activity, word clouds, friends, maps. [Tier 2] |
+|| **MyTweetAlerts** | Web | Limited free | Custom email alerts based on Twitter search queries. [Tier 2] |
+|| **TweetAPI Twitter ID Finder** | Web | Yes | Find the user ID behind a Twitter username or profile link, or look up the current username for an ID. [Tier 1] |
+|| **the-endorser** | GitHub (eth0izzle/the-endorser) | Yes | Draw out relationships between people on LinkedIn via endorsements and skills. [Tier 1] |
+|| **LinkedInDumper** | GitHub (l4rm4nd/LinkedInDumper) | Yes | Script to dump/scrape/extract company employee info from LinkedIn. [Tier 1] |
+|| **GroupDa** | Web | Yes | Search Telegram channels by category, country, and language. [Tier 1] |
+|| **Maltego Telegram** | GitHub (vognik/maltego-telegram) | Yes | Rich set of entities and transforms for OSINT on Telegram with Maltego. [Tier 1] |
+|| **TgramSearch** | Web | Yes | Convenient search for Telegram channels; structured catalog of 700,000+ channels. [Tier 1] |
+|| **Telepahty** | GitHub (proseltd/Telepathy-Community) | Yes | Archives Telegram chats and analyzes communication patterns within groups and channels. [Tier 1] |
+|| **Telegago** | Web | Yes | Google Custom Search for finding public and private Telegram channels and chats. [Tier 1] |
+|| **Telegram-Archive** | GitHub (GeiserX/Telegram-Archive) | Yes | Self-hosted backup of a Telegram account's chats and media with local web viewer and search. [Tier 1] |
+|| **TeleSearch** | Web | Yes | Search and find Telegram channels, groups, bots, and games. [Tier 1] |
+|| **TeleTracker** | GitHub (tsale/TeleTracker) | Yes | Python scripts for investigating Telegram channels; gather channel information. [Tier 1] |
+|| **tg-chat-dump** | GitHub (renkagod/tg-chat-dump) | Yes | Archives a whole Telegram group/channel/forum into searchable SQLite and per-topic JSONL files. [Tier 1] |
+|| **TGScope** | Web | Yes | Search engine and catalog of 3M+ public Telegram channels by topic, language, size; event pages mentioning people. [Tier 1] |
+|| **TGScope Channel Creation Date** | Web | Yes | Tells when a Telegram channel or supergroup was created from username, t.me link, or numeric ID. [Tier 1] |
+|| **TGStat** | Web | Limited free | OSINT platform analyzing Telegram channels, groups, metrics, trending activity. [Tier 2] |
+|| **TOsint** | GitHub (drego85/tosint) | Yes | Telegram OSINT: extract information from Telegram bots and channels. [Tier 1] |
+|| **OSINT-Steam** | Web | Yes | Open-source tool returning public info from Steam profiles: friends list, possible locations. [Tier 1] |
+|| **Steam-OSINT** | GitHub (matiash26/steam-osint) | Yes | Open-source OSINT tool for mutual friends analysis on Steam, supporting full friend lists. [Tier 1] |
+|| **GHNames** | Web | Yes | GitHub lookup: username history, associated emails, deleted repositories. [Tier 1] |
+|| **github_monitor** | GitHub (misiektoja/github_monitor) | Yes | Real-time tracking of GitHub users' activity: profile and repository changes, email alerts, CSV logging. [Tier 1] |
+|| **GithubRecon** | Web | Yes | Lookup GitHub users by username or email and gather associated data. [Tier 1] |
+|| **Dolphin Radar** | Web | 1 free view | Instagram Post Viewer: view posts, stories, profiles from public accounts. [Tier 2] |
+|| **IGDetective** | Web | Limited free | Anonymous Instagram investigation: story viewer, follower tracker, profile viewer, optional Story Archive. [Tier 2] |
+|| **instagram_monitor** | GitHub (misiektoja/instagram_monitor) | Yes | Real-time tracking of Instagram users' activity and profile changes; email alerts, CSV logging, story downloads. [Tier 1] |
+|| **Osintgraph** | GitHub (XD-MHLOO/Osintgraph) | Yes | Maps a target's Instagram data and relationships in Neo4j for social network analysis. [Tier 1] |
+|| **Toutatis** | GitHub (megadose/toutatis) | Yes | Extract information from Instagram accounts: emails, phone numbers, and more. [Tier 1] |
+|| **GetTikVideo** | Web | Yes | Full-size profile picture and latest public videos from a TikTok profile link, no account needed. [Tier 1] |
+|| **TikTokStalker** | Web | Yes | Lookup information about TikTok users and content. [Tier 1] |
+|| **Arctic Shift** | GitHub (ArthurHeitmann/arctic_shift) | Yes | Access and interact with large dumps of Reddit data via API and web interface. [Tier 1] |
+|| **Pushshift API** | Web | Yes | API for historical Reddit data: posts, comments, metadata for research. [Tier 1] |
+|| **Pullpush** | Web | Yes | Indexing and retrieval of Reddit content; useful for finding deleted/removed posts and comments. [Tier 1] |
+|| **REDARCS** | Web | Yes | Reddit archives 2005-2023. [Tier 1] |
+|| **RedditMetis** | Web | Limited free | Reddit user analysis tool: summary and statistics for an account, top posts, user activity. [Tier 2] |
+|| **Universal Scammer List** | Web | Yes | List of malicious Reddit accounts from /r/universalscammerlist; minimizes scam damage. [Tier 1] |
+|| **Дезертир** | Web | Yes | VKontakte OSINT application. [Tier 1] |
+|| **Barkov.net** | Web | Yes | VKontakte OSINT tools. [Tier 1] |
+|| **VK5** | Web | Yes | VKontakte search and OSINT utilities. [Tier 1] |
+|| **VK.watch** | Web | Yes | VKontakte profile and content lookup. [Tier 1] |
+|| **Groupio** | Web | Yes | Find and search WhatsApp groups. [Tier 1] |
+|| **Ancestry** | Web | Free trial with credit card | Premium genealogy and family history data. [Tier 3] |
+|| **Classmates** | Web | Free accounts | High-school-focused people search; create profile and view other members. [Tier 2] |
+|| **CrunchBase** | Web | Limited free | Business information database with executive and founder data. [Tier 2] |
+|| **Fold3 (US Military Records)** | Web | Limited free | Search U.S. military records; premium access requires subscription. [Tier 2] |
+|| **InfoTracer** | Web | Paid | People search across public records. [Tier 3] |
+|| **Mugshots** | Web | Yes | Arrest photos and booking records. [Tier 1] |
+|| **Reunion** | Web | Limited free | People search with limited free info, premium upsell. [Tier 2] |
+|| **SearchBug** | Web | Limited free | People search; limited free info, premium data upsell. [Tier 2] |
+|| **The National Archives (UK)** | Web | Yes | Search UK national archives. [Tier 1] |
+|| **HiCreators** | API (hicreator.ai/api-docs) | Paid | API collecting info about X, YouTube, Instagram and TikTok influencers. From $59/month. [Tier 3] |
+|| **SocialData API** | API (socialdata.tools) | Paid | Unofficial Twitter API: scrape tweets by user, hashtag or keyword, and user profiles. $0.20 per 1,000 results. [Tier 2] |
+|| **xdataapi.io** | API + MCP | Paid | Read-only public X data: profiles, tweets, threads, followers, search. MCP server and SDKs. $0.06-$0.125 per 1,000 items; 5,000 free credits. [Tier 2] |
+|| **DataXAPI** | API + MCP | Paid | Public posts, comments, accounts, search and hot lists from Douyin, Xiaohongshu, WeChat, Weibo, Bilibili, Zhihu, Kuaishou, TikTok, X, YouTube, Instagram, Reddit; Meta and Google ad libraries. Pay per call from $0.0003; up to 333 calls free. [Tier 2] |
 
 **Scout workflow integration:**
 - theHarvester is a Tier 1 default — run it on every person research request
@@ -209,6 +323,8 @@ Find compromised credentials and leaked personal data.
 || **LeakPeek** | API (leakpeek.io) | Leak database search | Paid | Search in leak databases. $9.99/4 weeks unlimited. |
 || **Psdmp.ws** | API (psbdmp.ws/api) | Pastebin search | Freemium | Search pastebin dumps. $9.95/10,000 requests. |
 || **BreachDirectory.org** | API (rapidapi.com/rohan-patra/api/breachdirectory) | Breach search | Freemium | Search domain, email, fullname, IP, phone, password, username in breaches. 50 req/mo free. |
+|| **CheckLeaked** | Web/API (checkleaked.cc) | Breach search | Freemium | Email, username, or phone breach check showing sources; free searches, developer API and chat bots. |
+|| **Hudson Rock** | Web (cavalier.hudsonrock.com/docs) | Infostealer search | Yes | Search whether a domain, email address, or username was compromised in global infostealer campaigns. |
 
 **Scout workflow integration:**
 - h8mail + HIBP run in parallel when email is known.
@@ -228,6 +344,7 @@ Search for a person's data on dark web markets, leak boards, paste sites, and fo
 | **Ahmia** | Web (ahmia.fi) | .onion search | Yes | Clearnet gateway to Tor search. Accessible via SearXNG if `.onion` indexing is enabled. |
 | **Onion Lookup** | API (onion.ail-project.org) | .onion metadata | Yes | Check existence of Tor hidden services and retrieve associated metadata. |
 | **Darksearch.io** | API (darksearch.io/apidoc) | .onion search | Free | Search by websites in .onion zone. |
+|| **Aleph Open Search** | Web (open-search.aleph-networks.eu) | Dark web search | Yes | Dark web search engine indexing .onion content. |
 
 **OnionClaw details:**
 - 18 verified-live dark web search engines: Ahmia, OnionLand, Amnesia, Torland, Excavator, Onionway, Tor66, OSS, Torgol, TheDeepSearches, DuckDuckGo-Tor, Ahmia-clearnet, plus 6 additional SICRY-based engines
@@ -301,6 +418,45 @@ These are MCP servers that can be connected via the `native-mcp` skill or `mcpor
 | **Helium MCP** | heliumtrades.com/mcp-page | News bias scoring | Freemium | 37-dimensional news bias scoring across 216 sources, market data, ML options pricing. |
 | **DataNexus MCP** | smithery.ai | Public records intelligence | Freemium | 55 tools across 7 domains: domain recon, patent search, US government contracts, regulatory filings, nonprofit data, CVE/SBOM, professional license verification. No API key required for free tier. |
 | **ZoomEye MCP** | zoomeye-ai/mcp_zoomeye | Network asset info | Freemium | Query ZoomEye for network asset info. 7-day free trial, requires API key. |
+|| **Consensus OSINT** | OSINT-Experts-Society/Consensus-OSINT | Person lookups | Free | Local MCP server for username, email, phone and web-page lookups; 7 tools with structured, paginated results. `consensus mcp --transport stdio`. |
+|| **OSINT Tools MCP** | frishtik/osint-tools-mcp-server | Person lookups | Free | Wraps Sherlock, Blackbird, Maigret, Holehe, Ghunt, theHarvester and SpiderFoot behind one MCP server; installs the underlying CLIs itself. |
+|| **OSINT Toolbox MCP** | renkagod/osint-toolbox-mcp | Person lookups | Free | Runs 12 OSINT tools locally: Sherlock, Maigret, Blackbird, Holehe, Ghunt, theHarvester, SpiderFoot, subfinder, dnsrecon, dnstwist, PhoneInfoga, ExifTool, plus WHOIS/DNS/crt.sh/Wayback. No API keys. |
+|| **LinkedIn MCP** | eliasbiondo/linkedin-mcp-server | Person lookups | Free | LinkedIn people, company and job search with structured profile data; uses your own session cookie, no API key. |
+|| **Clearfront** | scottmartinanderson/clearfront | Footprint scan | Free | Self-OSINT footprint scanner: 30 tools incl. username enumeration, email/breach checks, domain/IP recon, EXIF/GPS; evidence graph with confidence ratings. `pip install clearfront`. |
+|| **Darknet MCP** | badchars/darknet-mcp-server | Dark web + breach | Free | 66 tools: ransomware victim listings, stealer logs, HIBP, IntelX, Tor .onion fetching, exit-node checks; many keyless. |
+|| **Arcmira** | arcmira.com / mcp.arcmira.com/mcp | SOCMINT: public statements across indexed YouTube videos with transcript passages and source timestamps. Requires sign-in or API key. Free tier + paid plans. [Tier 2] |
+|| **TwitterAPIs MCP** | TwitterAPIs/twitterapis-mcp | X (Twitter) data: tweet search, user profiles, followers, timelines, account monitoring — 68 read tools without an X developer account. Pay per call ($0.0008, $0.50 starter credit). [Tier 2] |
+|| **TweetAPI MCP** | tweetapi/tweetapi-mcp | Read-only Twitter data: tweet search, profiles, About this account (location, username history), followers, lists, communities, Spaces. OAuth or TweetAPI key. [Tier 2] |
+|| **BulkTranscripts** | pratie/bulktranscripts-mcp | YouTube channel uploads, in-channel topic search, full transcripts as clean text — poll a subject's channel. 30 free credits/shared IP, then paid packs. [Tier 2] |
+|| **LinkMCP** | app.linkmcp.io | LinkedIn research and automation through your own account: profile/company lookup, people search, work email and mobile lookup. Free trial, plans from $19/month. [Tier 3] |
+|| **Kooperativa.io** | kooperativa-team/kooperativa-mcp | Enrich and search professional profiles and companies: work history, headcount by seniority, hiring signals, job changes. API key, 7-day free trial. [Tier 2] |
+|| **TubeText YouTube Transcripts** | LMSlay/tubetext-mcp | YouTube transcripts (videos, Shorts, playlists, channels, Whisper fallback), channel stats and Social Blade history. Apify OAuth; free monthly credit. [Tier 2] |
+|| **GetYouTubeTranscript** | getyoutubetranscript.com | Full YouTube transcripts, in-channel search, channel/video lists; polling latest uploads is free. OAuth or API key; 100 free credits. [Tier 2] |
+|| **LurkAPI** | lurkapi.com | Public profiles, posts, comments, video transcripts, ad library from TikTok, Instagram, YouTube, Reddit, X, LinkedIn and 10+ platforms without logging in. 89 tools. OAuth or API key; 100 free credits. [Tier 2] |
+|| **SandBase CLI** | sandbaseai/cli | Local MCP bridge for social/web OSINT: X, YouTube, Reddit, TikTok, Instagram, Xiaohongshu, Weibo, Bilibili, page scraping. Browser OAuth. [Tier 2] |
+|| **ReadGZH** | sweesama/readgzh | Full text of public WeChat Official Account articles as Markdown (title, account, publish time); keyword search and per-account listing. API key; anonymous shared-IP limits. [Tier 2] |
+|| **FilingFirehose** | filingfirehose.com/mcp | Hosted SEC EDGAR MCP for any US ticker: 8-K body-text parsing, 10-K/10-Q/S-3/13D reads, forensic risk scoring, cyber-incident tracking. Free public endpoints; paid from $9/month. [Tier 2] |
+|| **OpenSOSData** | OpenSOSData/opensosdata-mcp | US business entity search across all 53 Secretary of State jurisdictions; 33M-entity index. First 10 lookups free, then $0.0314 each. [Tier 2] |
+|| **Fylings** | HeyZod/fylings-mcp | African company intelligence across 18+ national registries: company search, beneficial ownership, contract awards, sanctions screening. Free, no API key. [Tier 1] |
+|| **Reestri** | apify.com/reestri | Public company registers of Georgia and Armenia: NAPR lookup, person-to-companies search, Armenian beneficial-owner declarations. Pay per lookup. [Tier 3] |
+|| **Auregistre** | auregistre.fr/api | Dated history of a French company by SIREN from BODACC gazette: name/seat/capital changes, insolvency, filed accounts, grants, state aid. No key, no account. [Tier 1] |
+|| **open-data-mcp** | markatdataandbeyond/open-data-mcp | EU VAT (VIES) + LEI, French Sirene, Nordic registries, TED tenders, PubMed, ClinicalTrials.gov, NHTSA VIN recalls. No API key for basic tools. [Tier 1] |
+|| **TinyRex MCP** | emirmrkaljevic/tinyrex-mcp | Official company registers (France, Norway, Finland, UK), GLEIF LEI, SEC EDGAR filings, US NPI registry (healthcare providers), EU/US/UK/NL tender portals. Runs on your Apify token. [Tier 2] |
+|| **Crunchbase Company API** | alphaosint.com/sources/crunchbase-company-api | Unofficial Crunchbase wrapper: funding rounds, investors, headcount range, founders and key people. Apify account required. [Tier 3] |
+|| **cvrradar** | cvrradar.dk | Danish CVR register: search by name/CVR/domain/email, people and roles with dates, ownership graph, annual accounts, bankruptcies. Free API key. [Tier 1] |
+|| **Equibles** | daniel3303/Equibles | Who owns and trades a US public company: SEC full-text search, Form 4 insider trades, 13F holders, congressional trades. Free tier 100 requests/day. [Tier 2] |
+|| **Edgrapi** | edgrapi.com | SAM.gov opportunities, USAspending awards, Grants.gov, House STOCK Act trades, SEC EDGAR filings as flat JSON. 19 read-only tools. 50 free credits, then $10/month. [Tier 2] |
+|| **EU & Nordic Open Data MCP** | itulo/eu-nordic-open-data-mcp | Official EU/Nordic records: EU sanctions, TED tenders, VIES VAT, GLEIF LEI, Finnish PRH, Norwegian Brreg, safety recalls. 49 tools. No key except optional Fingrid. [Tier 1] |
+|| **Open Data Actors MCP** | Mamoo85/open-data-actors-mcp | Sanctions screening, SEC Form D, new business filings, FMCSA carrier census, WARN layoffs, city agendas, WHOIS/DNS/SSL. Apify token, pay-per-result. [Tier 2] |
+|| **National ID & Tax ID Validator** | soxoj/national-id-mcp | Validate/decode national IDs, tax, company, VAT, passport, MRZ numbers: 222 types across 108 countries. Structure/checksum only, no registry query. Free. [Tier 1] |
+|| **Sanctions Screening MCP** | cyanheads/sanctions-screening-mcp-server | Screen names against consolidated OFAC, EU, UK, UN sanctions lists; resolve companies to GLEIF LEIs; local SQLite/FTS5 index, offline matching. Free, no API key. [Tier 1] |
+|| **ThreatCluster** | Jam0k/Threat-Intelligence-MCP | Clustered incident records from 20,000+ sources, validated IOCs, CVE lookup, ransomware leak-site victims. Free API key: 100 credits/day. [Tier 2] |
+|| **XposedOrNot** | XposedOrNot/XposedOrNot-API | Data breach lookups for emails and domains: breaches an address appears in, full breach history, public catalog, domain exposure counts. Read-only, no passwords. Free, no API key. [Tier 1] |
+|| **osint-agent-skills** | frangelbarrera/osint-agent-skills | 23 MCP tools: DNS, Shodan InternetDB, crt.sh, Wayback CDX, GitHub code search, OTX, HIBP, Etherscan, Mastodon. Zero-dependency Node.js server. Free. [Tier 1] |
+|| **Claudii Exploratores** | SOsintOps/claudii-exploratores | OSINT suite: 898 curated tools across 24 categories (people, usernames, email, domains, IP, phones, companies) as Claude Agent Skill and MCP server. Free (alpha). [Tier 1] |
+|| **Iris** | iriscan.app/mcp | Wallet attribution on Solana, EVM, Bitcoin, Tron: funding sources, money flows, labels from 640,000+ known addresses, mixer/bridge traces. 10 free analyses, then 3/day. [Tier 2] |
+|| **Tanod** | tanod.dev | Pre-transaction risk verdict, OFAC SDN crypto-address screening, token/transaction/ENS lookups, RDAP/DNS/IP. 200+ tools. Small free daily tier, then x402. [Tier 1] |
+|| **Bridge Watch** | LakeSky/bridge-watch | On-chain address intelligence on Base: resolve EVM addresses against 104,209 labeled entities (exchanges, bridges, contracts). Free anonymous tier, then x402. [Tier 2] |
 
 **Scout workflow integration:**
 - See `scout_mcp_discovery.md` for the dynamic discovery mechanism.
